@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>站点编辑</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ============================================================
+       站点编辑页面样式（1:1 对齐 UI/site/edit）
+       ============================================================ */
+    html, body { height: 100%; }
+    #app { height: 100%; }
+    .page-container { height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box; background: var(--content-gradient), var(--bg-body); }
+    .page-container::-webkit-scrollbar { width: 6px; }
+    .page-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+    /* 表单网格 */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    /* 源站地址行 */
+    .upstream-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    .upstream-row .upstream-addr { flex: 1; }
+    .upstream-row .upstream-proto { width: 118px; flex-shrink: 0; }
+    .upstream-row .weight-input { width: 120px; flex-shrink: 0; }
+    .upstream-row .del-upstream { width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .upstream-row .del-upstream:hover { color: var(--danger); border-color: var(--danger); }
+    .add-upstream { margin-top: 4px; }
+    /* 域名行 */
+    .domain-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    .domain-row .domain-input { flex: 1; }
+    .domain-row .domain-badge { flex-shrink: 0; font-size: 11px; color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 2px 8px; }
+    .domain-row .domain-badge:empty { display: none; }
+    .domain-row .del-domain { width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .domain-row .del-domain:hover { color: var(--danger); border-color: var(--danger); }
+    /* API路径行 */
+    .api-path-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    .api-path-row .api-path-input { flex: 1; }
+    .api-path-row .del-api-path { width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .api-path-row .del-api-path:hover { color: var(--danger); border-color: var(--danger); }
+    .add-api-path { margin-top: 4px; }
+    /* 提示信息框 */
+    .info-box { background: var(--accent-soft); border: 1px solid rgba(6,182,212,0.25); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 10px; }
+    .info-box i { color: var(--accent); margin-right: 6px; }
+    /* SSL 选项区 */
+    .ssl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+    /* 上传组件 */
+    .upload-box { border: 1px dashed var(--border-light); border-radius: 8px; padding: 18px 12px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .upload-box:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .upload-box.dragover { border-color: var(--accent); background: var(--accent-soft); }
+    .upload-placeholder i { font-size: 22px; color: var(--text-muted); margin-bottom: 6px; display: block; }
+    .upload-placeholder span { display: block; font-size: 13px; color: var(--text-secondary); }
+    .upload-placeholder small { display: block; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    /* 已上传文件信息 */
+    .upload-file { display: flex; align-items: center; gap: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+    .upload-file > i { font-size: 20px; color: var(--success); }
+    /* Logo上传：预览图 */
+    .upload-file .logo-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: contain; background: var(--bg-body); border: 1px solid var(--border); flex-shrink: 0; }
+    .file-meta { flex: 1; min-width: 0; }
+    .file-meta .file-name { display: block; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-meta .file-size { display: block; font-size: 11px; color: var(--text-muted); }
+    .file-remove { width: 28px; height: 28px; flex-shrink: 0; border: none; background: none; color: var(--text-muted); cursor: pointer; border-radius: 6px; font-size: 14px; }
+    .file-remove:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
+    /* 关闭开关行 */
+    .toggle-row { display: flex; align-items: center; gap: 12px; height: 38px; }
+    .toggle-row .switch { flex-shrink: 0; }
+    .toggle-row .toggle-tip { font-size: 12px; color: var(--text-secondary); }
+    /* 防护方式单选行 */
+    .radio-row { display: flex; align-items: center; gap: 20px; height: 38px; }
+    .radio-row .radio { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary); cursor: pointer; }
+    .radio-row .radio input { accent-color: var(--accent); }
+    /* 页面模板选择网格（Pro：每行两个类型） */
+    .pt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+    .pt-grid .pt-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+    @media (max-width: 768px) { .pt-grid { grid-template-columns: 1fr; } }
+    /* 表单底部 */
+    .form-footer { display: flex; justify-content: flex-end; gap: 12px; padding-top: 16px; margin-top: 8px; border-top: 1px solid var(--border); }
+    /* 校验错误提示 */
+    .err { color: var(--danger); font-size: 11px; margin-top: 5px; display: none; }
+    .err.show { display: block; }
+    .form-input.error, .form-textarea.error { border-color: var(--danger); }
+    /* 隐藏文件输入 */
+    .hidden-file { display: none; }
+    @media (max-width: 768px) { .form-grid, .ssl-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="page-container">
+    <div class="section-title">{{ isEdit ? '编辑站点' : '新增站点' }}<span class="sub">{{ isEdit ? 'Edit Site' : 'Add Site' }}</span></div>
+    <div class="card">
+      <div class="card-body">
+        <el-form :model="form" label-position="top" @submit.prevent="onSave">
+        <div class="form-grid">
+          <!-- 站点名称 -->
+          <el-form-item label="站点名称 *">
+            <el-input v-model="form.name" placeholder="如：官网主站" :class="{ error: errors.name }" @input="errors.name = false"></el-input>
+            <div class="err" :class="{ show: errors.name }">请输入站点名称</div>
+          </el-form-item>
+
+          <!-- 域名 -->
+          <el-form-item label="域名 *" class="full">
+            <div style="width:100%;">
+              <div v-for="(d, idx) in form.domains" :key="idx" class="domain-row">
+                <el-input v-model="d.value" class="domain-input" placeholder="如：www.gc-zb.com 或 *.gc-zb.com" :class="{ error: errors.domains }" @input="errors.domains = false"></el-input>
+                <span class="domain-badge">{{ idx === 0 ? '主域名' : '' }}</span>
+                <button type="button" class="del-domain" @click="removeDomain(idx)" title="删除"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              <el-button size="small" class="add-upstream" @click="addDomain"><i class="fa-solid fa-plus"></i> 添加域名</el-button>
+              <div class="err" :class="{ show: errors.domains }">请至少添加一个格式正确的域名</div>
+              <div class="form-hint">同一站点可绑定多个域名（如 www.gc-zb.com、m.gc-zb.com），共享一套 WAF 规则；泛域名以 <strong>*. 开头</strong>（如 *.gc-zb.com，匹配 www/api 等任意子域）；第一个为<strong>主域名</strong></div>
+            </div>
+          </el-form-item>
+
+          <!-- 监听端口 -->
+          <el-form-item label="监听端口 *">
+            <el-input-number v-model="form.listen_port" :min="1" :max="65535" placeholder="1 - 65535" style="width:100%;" :class="{ error: errors.port }" @change="errors.port = false"></el-input-number>
+            <div class="err" :class="{ show: errors.port }">端口范围为 1 - 65535</div>
+          </el-form-item>
+          <!-- 防护开关 -->
+          <el-form-item label="防护状态">
+            <div class="toggle-row">
+              <el-switch v-model="form.waf_enable"></el-switch>
+              <span class="toggle-tip">开启后启用 WAF 防护规则</span>
+            </div>
+          </el-form-item>
+
+          <!-- 源站地址 -->
+          <el-form-item label="源站地址 *" class="full">
+            <div style="width:100%;">
+              <div v-for="(u, idx) in form.upstreams" :key="idx" class="upstream-row">
+                <el-select class="upstream-proto" v-model="u.protocol" placeholder="协议">
+                  <el-option label="http" value="http"></el-option>
+                  <el-option label="https" value="https"></el-option>
+                </el-select>
+                <el-input v-model="u.addr" class="upstream-addr" placeholder="IP:端口 如 192.168.1.10:8080" :class="{ error: errors.upstreams }" @input="errors.upstreams = false"></el-input>
+                <el-input-number v-model="u.weight" :min="1" class="weight-input" placeholder="权重"></el-input-number>
+                <button type="button" class="del-upstream" @click="removeUpstream(idx)" title="删除"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              <!-- 免费版仅 1 个源站（能力收口）：隐藏添加按钮并给升级提示；Pro 不限量 -->
+              <el-button size="small" class="add-upstream" v-if="canAddUpstream" @click="addUpstream"><i class="fa-solid fa-plus"></i> 添加源站</el-button>
+              <div class="form-hint" v-if="!canAddUpstream" style="color:var(--warning);">免费版支持 1 个源站，升级 Pro 支持多源站加权负载均衡</div>
+              <div class="err" :class="{ show: errors.upstreams }">请至少添加一个有效的源站地址</div>
+              <div class="form-hint">格式：IP:端口，如 192.168.1.10:8080；协议选择回源 http/https（每个源站可分别配置）；WAF 按权重轮询转发实现负载均衡，权重越大分配流量越多</div>
+            </div>
+          </el-form-item>
+
+          <!-- API 接口路径 -->
+          <el-form-item label="API 接口路径" class="full">
+            <div style="width:100%;">
+              <div class="info-box"><i class="fa-solid fa-circle-info"></i>配置后，这些路径下的请求<strong>强制走 API 挑战协议</strong>（428 + 202 + 轮询），不再依赖 Accept 头自动判断。适用于 App 接口、小程序接口等场景，避免误判为浏览器请求返回 HTML。</div>
+              <div v-for="(p, idx) in form.api_paths" :key="idx" class="api-path-row">
+                <el-input v-model="p.value" class="api-path-input" placeholder="/api/* 或 /v1/*"></el-input>
+                <button type="button" class="del-api-path" @click="removeApiPath(idx)" title="删除"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              <el-button size="small" class="add-api-path" @click="addApiPath"><i class="fa-solid fa-plus"></i> 添加路径</el-button>
+              <div class="form-hint">格式：/api/* 或 /v1/*，支持通配符；留空则由 WAF 根据 Accept 头自动判断</div>
+            </div>
+          </el-form-item>
+
+          <!-- 上传目录 -->
+          <el-form-item label="上传目录" class="full">
+            <div style="width:100%;">
+              <div class="info-box"><i class="fa-solid fa-circle-info"></i>配置后，仅对命中这些目录的请求做 WebShell 文件名校验深检（上传接口常经受文件名伪装攻击）；留空则对所有请求做文件名校验。适用于上传目录与业务目录分离的站点。</div>
+              <div v-for="(p, idx) in form.upload_paths" :key="idx" class="api-path-row">
+                <el-input v-model="p.value" class="api-path-input" placeholder="/upload/* 或 /static/images/*" @input="errors.upload_paths = false"></el-input>
+                <button type="button" class="del-api-path" @click="removeUploadPath(idx)" title="删除"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              <el-button size="small" class="add-api-path" @click="addUploadPath"><i class="fa-solid fa-plus"></i> 添加上传目录</el-button>
+              <div class="form-hint">格式：/upload/* 或 /static/images/*，支持通配符，多个目录可逐一添加</div>
+            </div>
+          </el-form-item>
+
+          <!-- SSL 配置 -->
+          <el-form-item label="SSL 配置" class="full">
+            <div style="width:100%;">
+              <div class="toggle-row">
+                <el-switch v-model="form.ssl_enabled"></el-switch>
+                <span class="toggle-tip">启用 HTTPS，需上传证书与私钥</span>
+              </div>
+              <div class="ssl-grid" v-if="form.ssl_enabled" style="margin-top:12px;">
+                <!-- 证书上传 -->
+                <el-form-item label="证书文件 *" style="margin-bottom:0;">
+                  <div style="width:100%;">
+                    <div class="upload-box" :class="{ dragover: uploads.cert.dragover }"
+                      @click="pickFile('cert')" @dragover.prevent="uploads.cert.dragover = true"
+                      @dragleave.prevent="uploads.cert.dragover = false" @drop.prevent="dropFile('cert', $event)">
+                      <div class="upload-placeholder" v-if="!uploads.cert.name">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>点击或拖拽上传证书文件</span>
+                        <small>支持 .crt / .pem / .cer</small>
+                      </div>
+                      <div class="upload-file" v-else>
+                        <i class="fa-solid fa-file-circle-check"></i>
+                        <div class="file-meta">
+                          <span class="file-name">{{ uploads.cert.name }}</span>
+                          <span class="file-size">{{ uploads.cert.size }}</span>
+                        </div>
+                        <button type="button" class="file-remove" @click.stop="clearFile('cert')" title="移除"><i class="fa-solid fa-xmark"></i></button>
+                      </div>
+                      <input type="file" ref="certFile" class="hidden-file" accept=".crt,.pem,.cer" @change="onFilePick('cert', $event)">
+                    </div>
+                    <div class="err" :class="{ show: errors.cert }">请上传证书文件</div>
+                  </div>
+                </el-form-item>
+                <!-- 私钥上传 -->
+                <el-form-item label="私钥文件 *" style="margin-bottom:0;">
+                  <div style="width:100%;">
+                    <div class="upload-box" :class="{ dragover: uploads.key.dragover }"
+                      @click="pickFile('key')" @dragover.prevent="uploads.key.dragover = true"
+                      @dragleave.prevent="uploads.key.dragover = false" @drop.prevent="dropFile('key', $event)">
+                      <div class="upload-placeholder" v-if="!uploads.key.name">
+                        <i class="fa-solid fa-key"></i>
+                        <span>点击或拖拽上传私钥文件</span>
+                        <small>支持 .key / .pem</small>
+                      </div>
+                      <div class="upload-file" v-else>
+                        <i class="fa-solid fa-file-circle-check"></i>
+                        <div class="file-meta">
+                          <span class="file-name">{{ uploads.key.name }}</span>
+                          <span class="file-size">{{ uploads.key.size }}</span>
+                        </div>
+                        <button type="button" class="file-remove" @click.stop="clearFile('key')" title="移除"><i class="fa-solid fa-xmark"></i></button>
+                      </div>
+                      <input type="file" ref="keyFile" class="hidden-file" accept=".key,.pem" @change="onFilePick('key', $event)">
+                    </div>
+                    <div class="err" :class="{ show: errors.key }">请上传私钥文件</div>
+                  </div>
+                </el-form-item>
+              </div>
+            </div>
+          </el-form-item>
+
+          <!-- 跳过源站证书校验 -->
+          <el-form-item label="跳过源站证书校验" class="full">
+            <div class="toggle-row">
+              <el-switch v-model="form.upstream_skip_verify"></el-switch>
+              <span class="toggle-tip">开启后回源 https 不校验源站证书有效性，仅在源站使用内网自签证书、回源报证书错误时开启</span>
+            </div>
+          </el-form-item>
+
+          <!-- 客户端IP判定方式 -->
+          <el-form-item label="客户端IP判定方式" class="full">
+            <div style="width:100%;">
+              <div class="radio-row">
+                <el-radio :value="1" v-model="form.client_ip_mode">取 RemoteAddr</el-radio>
+                <el-radio :value="2" v-model="form.client_ip_mode">取 X-Forwarded-For 第 N 个</el-radio>
+                <el-radio :value="3" v-model="form.client_ip_mode">取指定 Header 字段</el-radio>
+              </div>
+              <div v-if="form.client_ip_mode === 2" style="margin-top:10px;">
+                <el-form-item label="取第几个 IP" style="margin-bottom:0;">
+                  <el-input-number v-model="form.client_ip_index" :min="1" :max="999" style="max-width:160px;" placeholder="1 = 最靠前的真实客户端"></el-input-number>
+                  <div class="form-hint" style="margin-top:4px;">1 表示取 X-Forwarded-For 中最靠前的 IP（最接近真实客户端的那个，需外层代理按顺序追加）</div>
+                </el-form-item>
+              </div>
+              <div v-if="form.client_ip_mode === 3" style="margin-top:10px;">
+                <el-form-item label="Header 字段名" style="margin-bottom:0;">
+                  <el-input v-model="form.client_ip_header" style="max-width:240px;" placeholder="如：X-Real-IP"></el-input>
+                  <div class="form-hint" style="margin-top:4px;">填写携带真实客户端 IP 的自定义请求头名称（如 X-Real-IP），取该头的第一个 IP 作为客户端 IP</div>
+                </el-form-item>
+              </div>
+              <div class="form-hint" style="margin-top:4px;">默认取 RemoteAddr；在外层挂了代理（如 EO / Nginx / SLB）时，需按实际情况选择 X-Forwarded-For 或自定义 Header，否则客户端 IP 会误判为代理节点</div>
+            </div>
+          </el-form-item>
+
+          <!-- 站点Logo -->
+          <el-form-item label="站点 Logo" class="full">
+            <div style="width:100%;">
+              <div class="upload-box" :class="{ dragover: uploads.logo.dragover }"
+                @click="pickFile('logo')" @dragover.prevent="uploads.logo.dragover = true"
+                @dragleave.prevent="uploads.logo.dragover = false" @drop.prevent="dropFile('logo', $event)">
+                <div class="upload-placeholder" v-if="!uploads.logo.name">
+                  <i class="fa-solid fa-image"></i>
+                  <span>点击或拖拽上传 Logo 图片</span>
+                  <small>支持 .png / .jpg / .svg / .webp / .ico，建议透明底，5MB 以内</small>
+                </div>
+                <div class="upload-file" v-else>
+                  <img v-if="form.logo_url" :src="form.logo_url" class="logo-thumb" alt="logo">
+                  <i v-else class="fa-solid fa-file-circle-check"></i>
+                  <div class="file-meta">
+                    <span class="file-name">{{ uploads.logo.name }}</span>
+                    <span class="file-size">{{ uploads.logo.size }}</span>
+                  </div>
+                  <button type="button" class="file-remove" @click.stop="clearFile('logo')" title="移除"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <input type="file" ref="logoFile" class="hidden-file" accept=".png,.jpg,.jpeg,.gif,.svg,.webp,.ico,image/*" @change="onFilePick('logo', $event)">
+              </div>
+              <div class="form-hint">站点 Logo 用于拦截页/挑战页/等候室页模板中展示；留空则使用系统默认 Logo</div>
+            </div>
+          </el-form-item>
+
+          <!-- 备注 -->
+          <el-form-item label="备注" class="full">
+            <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="站点用途、负责人、注意事项等"></el-input>
+          </el-form-item>
+
+          <!-- 记录访问日志 -->
+          <el-form-item label="记录访问日志" class="full">
+            <div class="toggle-row">
+              <el-switch v-model="form.log_enable"></el-switch>
+              <span class="toggle-tip">记录原始访问日志用于统计分析</span>
+            </div>
+          </el-form-item>
+
+          <!-- 防护方式 -->
+          <el-form-item label="防护方式" class="full" v-if="form.waf_enable">
+            <div style="width:100%;">
+              <div class="radio-row">
+                <el-radio value="js" v-model="form.defense_type">JS挑战</el-radio>
+                <el-radio value="captcha" v-model="form.defense_type">人机验证</el-radio>
+                <span class="toggle-tip">JS挑战静默验证，人机验证需要用户交互</span>
+              </div>
+              <div v-if="form.defense_type === 'captcha'" style="margin-top:10px;">
+                <el-form-item label="验证模板" style="margin-bottom:0;">
+                  <el-select v-model="form.challenge_template" style="max-width:240px;" placeholder="请选择验证模板">
+                    <el-option label="滑块验证（默认）" value="slider"></el-option>
+                    <el-option label="拼图验证" value="puzzle"></el-option>
+                    <el-option label="图形验证码" value="captcha"></el-option>
+                  </el-select>
+                </el-form-item>
+              </div>
+              <div v-if="form.defense_type === 'js'" style="margin-top:10px;">
+                <el-form-item label="JS挑战时长" style="margin-bottom:0;">
+                  <div class="radio-row">
+                    <el-radio value="0" v-model="form.js_delay">0秒（透明注入）</el-radio>
+                    <el-radio value="1" v-model="form.js_delay">1秒（6个参数）</el-radio>
+                    <el-radio value="3" v-model="form.js_delay">3秒（7个参数）</el-radio>
+                    <el-radio value="5" v-model="form.js_delay">5秒（8个参数）</el-radio>
+                  </div>
+                  <div class="form-hint" style="margin-top:4px;">0秒档：内容正常直出，响应注入采集脚本异步评分，真人零打扰；评分不过的下一次请求升级为1秒JS挑战。1/3/5秒档：静默验证时长与采集参数个数（1秒采集6个、3秒采集7个、5秒采集8个），满载满分100，按因子强度加权归一化计分，累计达到凭证阈值才发凭证</div>
+                </el-form-item>
+              </div>
+            </div>
+          </el-form-item>
+
+          <!-- 页面模板（Pro：按站点定制拦截/验证/排队/错误页） -->
+          <el-form-item v-if="isPro" label="页面模板" class="full">
+            <div style="width:100%;">
+              <div class="pt-grid">
+                <div v-for="t in pageTplTypes" :key="t.type">
+                  <div class="pt-label">{{ t.name }}</div>
+                  <el-select v-model="form.page_templates[t.type]" style="width:100%;" placeholder="默认模板">
+                    <el-option label="默认模板（全局）" :value="0"></el-option>
+                    <el-option v-for="o in (tplOptions[t.type] || [])" :key="o.id" :label="o.name" :value="o.id"></el-option>
+                  </el-select>
+                </div>
+              </div>
+              <div class="form-hint" style="margin-top:6px;">为当前站点选用自定义页面模板（在「系统配置 → 拦截页面模板」中新建），未选择的类型使用全局默认模板</div>
+            </div>
+          </el-form-item>
+        </div>
+
+        <el-form-item>
+          <div class="form-footer" style="width:100%;">
+            <el-button @click="back"><i class="fa-solid fa-xmark"></i> 取消</el-button>
+            <el-button type="primary" :disabled="saving" @click="onSave"><i class="fa-solid fa-floppy-disk"></i> 保存</el-button>
+          </div>
+        </el-form-item>
+        </el-form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+
+/* 页面模板类型清单（Pro 按站点定制；与后台模板管理页 8 类一致，browser_guide 无站点上下文不列出） */
+const PAGE_TPL_TYPES = [
+  { type: 'block', name: '拦截页' },
+  { type: 'silent_challenge', name: '静默JS挑战页' },
+  { type: 'slider', name: '滑块验证页' },
+  { type: 'captcha', name: '图形验证码页' },
+  { type: 'puzzle', name: '拼图验证页' },
+  { type: 'waiting_room', name: '等候室排队页' },
+  { type: 'overload', name: '过载拦截页' },
+  { type: 'server_error', name: '源站不可用页' }
+];
+/* 全 0 映射（0=使用默认模板） */
+function zeroPageTpls() {
+  const m = {};
+  PAGE_TPL_TYPES.forEach(t => { m[t.type] = 0; });
+  return m;
+}
+
+const app = createApp({
+  data() {
+    return {
+      id: 0,
+      isEdit: false,
+      saving: false,
+      maxUpstreams: 0, // 源站数上限（0=不限，/api/system/info capabilities 驱动）
+      isPro: false,    // 页面模板按站点定制能力（capabilities.per_site_template）
+      pageTplTypes: PAGE_TPL_TYPES,
+      tplOptions: {},  // type -> 自定义模板下拉（不含默认，默认=0 由固定项承载）
+      form: {
+        name: '', domains: [{ value: '' }], listen_port: 80,
+        upstreams: [{ addr: '', weight: 1, protocol: 'http' }],
+        api_paths: [{ value: '' }],
+        upload_paths: [{ value: '' }],
+        ssl_enabled: false, cert_path: '', key_path: '',
+        upstream_skip_verify: false,
+        client_ip_mode: 1, client_ip_index: 1, client_ip_header: '',
+        logo_url: '', remark: '',
+        waf_enable: true, defense_type: 'js', challenge_template: 'slider', js_delay: '1', log_enable: true,
+        page_templates: zeroPageTpls()
+      },
+      errors: { name: false, port: false, domains: false, upstreams: false, cert: false, key: false },
+      uploads: {
+        cert: { name: '', size: '', dragover: false },
+        key: { name: '', size: '', dragover: false },
+        logo: { name: '', size: '', dragover: false }
+      },
+      pendingCert: null,
+      pendingKey: null
+    };
+  },
+  computed: {
+    /* 免费版仅 1 个源站：已有源站行数达上限或上限为 1 时不显示"添加源站" */
+    canAddUpstream() {
+      const rows = (this.form.upstreams || []).length;
+      return this.maxUpstreams === 0 || rows < this.maxUpstreams;
+    }
+  },
+  mounted() {
+    ThemeManager.init();
+    // 源站数量上限（免费 1 / Pro 不限）：驱动"添加源站"按钮显隐；
+    // 页面模板按站点定制（Pro 独占）：驱动"页面模板"区块显隐与下拉数据加载
+    App.loadInfo().then((info) => {
+      const caps = (info && info.capabilities) || {};
+      this.maxUpstreams = Number(caps.max_upstreams) || 0;
+      this.isPro = !!caps.per_site_template;
+      if (this.isPro) this.loadTplOptions();
+    });
+    const q = new URLSearchParams(location.search);
+    const id = parseInt(q.get('id'), 10);
+    if (id > 0) {
+      this.isEdit = true;
+      this.id = id;
+      App.api.site.info(id).then((s) => this.fill(s)).catch(() => {});
+    }
+  },
+  methods: {
+    back() { window.location.href = '/site/index.html'; },
+    fill(s) {
+      const domains = (s.domains || '').split(',').filter(Boolean).map(v => ({ value: v }));
+      let upstreams = [{ addr: '', weight: 1, protocol: 'http' }];
+      try {
+        const arr = JSON.parse(s.upstreams || '[]');
+        if (Array.isArray(arr) && arr.length) upstreams = arr.map(u => ({ addr: u.addr || '', weight: u.weight || 1, protocol: u.protocol || 'http' }));
+      } catch (e) {}
+      let apiPaths = [{ value: '' }];
+      try {
+        const arr = JSON.parse(s.api_paths || '[]');
+        if (Array.isArray(arr) && arr.length) apiPaths = arr.map(v => ({ value: v }));
+      } catch (e) {}
+      // upload_paths 存储为逗号分隔串（区别于 api_paths 的 JSON 数组），逐项拆分回填
+      const uploadPaths = (s.upload_paths || '').split(',').map(v => v.trim()).filter(Boolean).map(v => ({ value: v }));
+      // page_templates 存储为 {模板类型:模板ID} JSON 映射，按类型清单回填（缺失类型补 0=默认模板）
+      let pageTpls = {};
+      try { pageTpls = JSON.parse(s.page_templates || '{}') || {}; } catch (e) {}
+      const pageTemplates = zeroPageTpls();
+      PAGE_TPL_TYPES.forEach(t => { pageTemplates[t.type] = pageTpls[t.type] || 0; });
+      this.form = {
+        name: s.name || '',
+        domains: domains.length ? domains : [{ value: '' }],
+        listen_port: s.listen_port || 80,
+        upstreams: upstreams,
+        api_paths: apiPaths,
+        upload_paths: uploadPaths.length ? uploadPaths : [{ value: '' }],
+        ssl_enabled: s.ssl_enabled === 1,
+        cert_path: s.cert_path || '',
+        key_path: s.key_path || '',
+        upstream_skip_verify: s.upstream_skip_verify === 1,
+        client_ip_mode: s.client_ip_mode || 1,
+        client_ip_index: s.client_ip_index || 1,
+        client_ip_header: s.client_ip_header || '',
+        logo_url: s.logo_url || '',
+        remark: s.remark || '',
+        waf_enable: s.waf_enable === 1,
+        defense_type: s.defense_type || 'js',
+        challenge_template: s.challenge_template || 'slider',
+        // js_delay 档位 0/1/3/5 互斥单选（0=透明注入档）：0 不可被 || 兜底吞掉；
+        // 转字符串与 el-radio 的 value（字符串）严格相等匹配，回显已选档位
+        js_delay: String([0, 1, 3, 5].indexOf(Number(s.js_delay)) >= 0 ? Number(s.js_delay) : 1),
+        log_enable: s.log_enable === 1,
+        page_templates: pageTemplates
+      };
+      if (this.form.cert_path) this.uploads.cert = { name: this.form.cert_path, size: '已配置，重新上传可替换', dragover: false };
+      if (this.form.key_path) this.uploads.key = { name: this.form.key_path, size: '已配置，重新上传可替换', dragover: false };
+      if (this.form.logo_url) this.uploads.logo = { name: this.form.logo_url.split('/').pop(), size: '已上传，重新上传可替换', dragover: false };
+    },
+    addDomain() { this.form.domains.push({ value: '' }); },
+    removeDomain(idx) {
+      this.form.domains.splice(idx, 1);
+      if (!this.form.domains.length) this.addDomain();
+      this.errors.domains = false;
+    },
+    addUpstream() { this.form.upstreams.push({ addr: '', weight: 1, protocol: 'http' }); },
+    removeUpstream(idx) {
+      this.form.upstreams.splice(idx, 1);
+      if (!this.form.upstreams.length) this.addUpstream();
+      this.errors.upstreams = false;
+    },
+    addApiPath() { this.form.api_paths.push({ value: '' }); },
+    removeApiPath(idx) {
+      this.form.api_paths.splice(idx, 1);
+      if (!this.form.api_paths.length) this.addApiPath();
+    },
+    addUploadPath() { this.form.upload_paths.push({ value: '' }); },
+    removeUploadPath(idx) {
+      this.form.upload_paths.splice(idx, 1);
+      if (!this.form.upload_paths.length) this.addUploadPath();
+    },
+    pickFile(kind) { this.$refs[kind + 'File'].click(); },
+    onFilePick(kind, e) {
+      const file = e.target.files[0];
+      this.handleFile(kind, file);
+      e.target.value = '';
+    },
+    dropFile(kind, e) {
+      this.uploads[kind].dragover = false;
+      const file = e.dataTransfer.files[0];
+      if (file) this.handleFile(kind, file);
+    },
+    handleFile(kind, file) {
+      if (!file) return;
+      if (kind === 'logo') { this.handleLogo(file); return; }
+      if (file.size > 1024 * 1024) { ElementPlus.ElMessage.error('文件过大，证书/私钥应小于 1MB'); return; }
+      this.uploads[kind].name = file.name;
+      this.uploads[kind].size = (file.size / 1024).toFixed(1) + ' KB';
+      this.errors[kind] = false;
+      // 证书/私钥各自独立上传（与 logo 一致），上传成功后回填对应路径
+      const certKind = kind === 'cert' ? 'cert' : 'key';
+      // 新增站点(id=0)尚无可上传的 site_id：先保存建站拿到 id，再上传并回填
+      if (this.id <= 0) {
+        const data = this.collectForm();
+        App.api.site.save(data).then((d) => {
+          this.id = d.id || 0;
+          if (this.id > 0) { this.doUploadCert(certKind, file); }
+          else { ElementPlus.ElMessage.warning('站点已保存但未取得ID，证书未上传，请刷新后重试'); }
+        }).catch(() => {
+          ElementPlus.ElMessage.error('站点保存失败，证书未上传');
+          this.uploads[kind] = { name: '', size: '', dragover: false };
+        });
+        return;
+      }
+      this.doUploadCert(certKind, file);
+    },
+    doUploadCert(kind, file) {
+      App.api.site.uploadCert(this.id, kind, file).then((d) => {
+        if (kind === 'cert') { this.form.cert_path = d.path; this.uploads.cert.size = (file.size / 1024).toFixed(1) + ' KB，已上传'; }
+        else { this.form.key_path = d.path; this.uploads.key.size = (file.size / 1024).toFixed(1) + ' KB，已上传'; }
+        ElementPlus.ElMessage.success(kind === 'cert' ? '证书上传成功' : '私钥上传成功');
+      }).catch(() => {
+        this.uploads[kind] = { name: '', size: '', dragover: false };
+      });
+    },
+    // collectForm 提取当前表单为保存参数（与 onSave 一致，供新增站点先建站时复用）
+    collectForm() {
+      const domains = this.form.domains.map(d => d.value.trim()).filter(Boolean);
+      const ups = this.form.upstreams.filter(u => u.addr.trim()).map(u => ({ addr: u.addr.trim(), weight: u.weight || 1, protocol: u.protocol || 'http' }));
+      const apiPaths = this.form.api_paths.map(p => p.value.trim()).filter(Boolean);
+      const uploadPaths = this.form.upload_paths.map(p => p.value.trim()).filter(Boolean).join(',');
+      return {
+        id: this.id || '',
+        name: this.form.name.trim(),
+        domains: domains.join(','),
+        listen_port: this.form.listen_port,
+        upstreams: JSON.stringify(ups),
+        api_paths: JSON.stringify(apiPaths),
+        upload_paths: uploadPaths,
+        ssl_enabled: App.to01(this.form.ssl_enabled),
+        cert_path: this.form.cert_path,
+        key_path: this.form.key_path,
+        upstream_skip_verify: App.to01(this.form.upstream_skip_verify),
+        client_ip_mode: this.form.client_ip_mode,
+        client_ip_index: this.form.client_ip_mode === 2 ? (this.form.client_ip_index || 1) : 1,
+        client_ip_header: this.form.client_ip_mode === 3 ? this.form.client_ip_header.trim() : '',
+        logo_url: this.form.logo_url.trim(),
+        remark: this.form.remark.trim(),
+        status: App.to01(this.form.waf_enable),
+        log_enable: App.to01(this.form.log_enable),
+        waf_enable: App.to01(this.form.waf_enable),
+        defense_type: this.form.defense_type,
+        challenge_template: this.form.challenge_template,
+        js_delay: this.form.js_delay,
+        page_templates: this.collectPageTpls()
+      };
+    },
+    // collectPageTpls 页面模板映射仅提交非零选择（0=使用默认模板不入映射）；免费版提交空串
+    collectPageTpls() {
+      if (!this.isPro) return '';
+      const m = {};
+      this.pageTplTypes.forEach(t => {
+        const id = Number(this.form.page_templates[t.type]) || 0;
+        if (id > 0) m[t.type] = id;
+      });
+      return Object.keys(m).length ? JSON.stringify(m) : '';
+    },
+    // loadTplOptions 自定义页面模板下拉数据（仅 is_default=0 的自定义模板，按类型分组）
+    loadTplOptions() {
+      App.api.template.list().then((list) => {
+        const byType = {};
+        (list || []).forEach(t => {
+          if (t.is_default === 1) return;
+          if (!byType[t.type]) byType[t.type] = [];
+          byType[t.type].push({ id: t.id, name: t.name });
+        });
+        this.tplOptions = byType;
+      }).catch(() => {});
+    },
+    handleLogo(file) {
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const allow = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
+      if (!allow.includes(ext)) { ElementPlus.ElMessage.error('仅支持 png/jpg/jpeg/gif/svg/webp/ico 图片格式'); return; }
+      if (file.size > 5 * 1024 * 1024) { ElementPlus.ElMessage.error('Logo图片应小于 5MB'); return; }
+      this.uploads.logo.name = file.name;
+      this.uploads.logo.size = (file.size / 1024).toFixed(1) + ' KB，上传中...';
+      App.api.site.uploadLogo(file).then((d) => {
+        this.form.logo_url = d.url;
+        this.uploads.logo.size = (file.size / 1024).toFixed(1) + ' KB';
+        ElementPlus.ElMessage.success('Logo上传成功');
+      }).catch(() => {
+        this.uploads.logo.name = '';
+        this.uploads.logo.size = '';
+      });
+    },
+    clearFile(kind) {
+      this.uploads[kind] = { name: '', size: '', dragover: false };
+      if (kind === 'cert') this.form.cert_path = '';
+      else if (kind === 'key') this.form.key_path = '';
+      else if (kind === 'logo') this.form.logo_url = '';
+    },
+    validate() {
+      const e = { name: false, port: false, domains: false, upstreams: false, cert: false, key: false };
+      let ok = true;
+      if (!this.form.name.trim()) { e.name = true; ok = false; }
+      const port = this.form.listen_port;
+      if (!port || port < 1 || port > 65535) { e.port = true; ok = false; }
+      const domains = this.form.domains.map(d => d.value.trim()).filter(Boolean);
+      const domainRe = /^(?:\*\.)?(?!-)[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$/;
+      if (!domains.length || !domains.every(d => domainRe.test(d))) { e.domains = true; ok = false; }
+      if (!this.form.upstreams.some(u => u.addr.trim())) { e.upstreams = true; ok = false; }
+      if (this.form.ssl_enabled) {
+        if (!this.form.cert_path) { e.cert = true; ok = false; }
+        if (!this.form.key_path) { e.key = true; ok = false; }
+      }
+      const ipMode = this.form.client_ip_mode;
+      if (ipMode === 2 && (!this.form.client_ip_index || this.form.client_ip_index < 1)) {
+        ElementPlus.ElMessage.warning('请填写合法的取 IP 序号（正整数）'); ok = false;
+      }
+      if (ipMode === 3 && !this.form.client_ip_header.trim()) {
+        ElementPlus.ElMessage.warning('请填写自定义 Header 字段名'); ok = false;
+      }
+      this.errors = e;
+      return ok;
+    },
+    onSave() {
+      if (!this.validate()) { ElementPlus.ElMessage.warning('请检查表单填写'); return; }
+      const data = this.collectForm();
+      this.saving = true;
+      App.api.site.save(data).then(() => {
+        ElementPlus.ElMessage.success(this.isEdit ? '站点已更新' : '站点已创建');
+        setTimeout(() => this.back(), 600);
+      }).finally(() => this.saving = false);
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

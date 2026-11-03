@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>加入IP组</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* 本页由 DialogBridge 以 iframe 弹窗形式加载（标题栏由主框架提供） */
+    /* iframe 页面：填满弹窗高度；底色与 whitelist/add.html 一致（卡片色，浅色主题即白色）；内容区滚动、底部按钮常驻 */
+    html, body { height: 100%; overflow: hidden; background: var(--bg-card); }
+    #app { height: 100%; display: flex; flex-direction: column; }
+    .mono { font-family: "SF Mono", Consolas, Menlo, monospace; color: var(--text-primary); }
+    .ipg-body { flex: 1; overflow-y: auto; padding: 18px 20px 4px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+    .ipg-body .highlight { color: var(--text-primary); font-weight: 600; font-family: "SF Mono", Consolas, monospace; }
+    .ipg-name-input { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary); font-size: 13px; box-sizing: border-box; }
+    .ipg-name-input:focus { outline: none; border-color: var(--accent); }
+    .ipg-footer { flex-shrink: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
+    .ipg-hint { margin-top: 8px; font-size: 12px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="ipg-body">
+    <el-form :model="{}" label-position="top" @submit.prevent="confirm">
+    <div style="margin-bottom:12px;">将源IP <span class="highlight">{{ ip }}</span> 加入 IP 组，加入后被该组引用的规则将对它生效。</div>
+    <el-radio-group v-model="mode" style="margin-bottom:12px;">
+      <el-radio-button value="select">选择已有组</el-radio-button>
+      <el-radio-button value="new">新建组</el-radio-button>
+    </el-radio-group>
+    <template v-if="mode === 'select'">
+      <el-select v-model="selectId" filterable placeholder="请选择IP组" style="width:100%;">
+        <el-option v-for="g in groups" :key="g.id" :value="g.id" :label="g.name + '（' + countOf(g) + '条）'"></el-option>
+      </el-select>
+      <div v-if="groups.length === 0" class="ipg-hint">暂无可选IP组，请切换到「新建组」。</div>
+    </template>
+    <template v-else>
+      <el-input v-model="newName" placeholder="请输入新IP组的名称，如：恶意IP-20260901"></el-input>
+    </template>
+    </el-form>
+  </div>
+
+  <div class="ipg-footer">
+    <el-button @click="close">取消</el-button>
+    <el-button type="danger" :disabled="saving" @click="confirm"><el-icon :size="13" style="margin-right:3px;"><component :is="'Check'"/></el-icon> 确认加入</el-button>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+/* 弹窗 id 必须与父页面 DialogBridge.open({ id }) 一致 */
+const DIALOG_ID = 'al_ipgroup';
+
+const app = createApp({
+  data() {
+    return { ip: '', mode: 'select', groups: [], selectId: '', newName: '', saving: false };
+  },
+  mounted() {
+    ThemeManager.init();
+    this.ip = new URLSearchParams(window.location.search).get('ip') || '';
+    App.api.ipGroup.list(1, 1000).then(({ list }) => {
+      this.groups = list || [];
+    }).catch(() => { this.groups = []; });
+  },
+  methods: {
+    /* 在弹窗内 → 通知主框架关闭；被直接打开（无父窗口）→ 返回上一页 */
+    close() {
+      if (window.parent && window.parent !== window) {
+        DialogBridge.close({ id: DIALOG_ID, msg: '', refresh: false });
+        return;
+      }
+      if (history.length > 1) history.back();
+    },
+    /* IP 组内已配置的条目数 */
+    countOf(g) {
+      return (g && g.ip_list) ? g.ip_list.split(/\r?\n/).map(s => s.trim()).filter(Boolean).length : 0;
+    },
+    /* 确认加入：新建组 or 追加到已有组 */
+    confirm() {
+      const ip = (this.ip || '').trim();
+      if (!ip) { ElementPlus.ElMessage.warning('无有效源IP'); this.saving = false; return; }
+      this.saving = true;
+      const finish = () => { this.saving = false; };
+      if (this.mode === 'new') {
+        const name = (this.newName || '').trim();
+        if (!name) { ElementPlus.ElMessage.warning('请输入IP组名称'); this.saving = false; return; }
+        App.api.ipGroup.save({ id: '', name: name, type: 'ip', ip_list: ip, count: 1, status: 1 })
+          .then(() => { ElementPlus.ElMessage.success(`已新建IP组「${name}」并加入 ${ip}`); this.close(); })
+          .catch(() => {}).finally(finish);
+        return;
+      }
+      const g = this.groups.find(x => String(x.id) === String(this.selectId));
+      if (!g) { ElementPlus.ElMessage.warning('请选择IP组'); this.saving = false; return; }
+      const arr = (g.ip_list || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (arr.includes(ip)) { ElementPlus.ElMessage.warning(`源IP ${ip} 已在IP组「${g.name}」中`); this.saving = false; return; }
+      arr.push(ip);
+      App.api.ipGroup.save({ id: g.id, name: g.name, type: g.type, ip_list: arr.join('\n'), count: arr.length, status: g.status })
+        .then(() => { ElementPlus.ElMessage.success(`源IP ${ip} 已加入IP组「${g.name}」`); this.close(); })
+        .catch(() => {}).finally(finish);
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

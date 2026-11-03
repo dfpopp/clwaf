@@ -1,0 +1,132 @@
+/* ========================================
+   主题变量定义
+   包含：主题色、深浅色模式、布局尺寸、间距、字体等
+   ======================================== */
+
+:root {
+  /* 主题色 */
+  --theme-color: #409EFF;
+  --theme-color-light-3: #79bbff;
+  --theme-color-light-5: #a0cfff;
+  --theme-color-light-7: #c6e2ff;
+  --theme-color-light-8: #d9ecff;
+  --theme-color-light-9: #ecf5ff;
+  --theme-color-dark-2: #337ecc;
+
+  /* 布局尺寸 */
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 64px;
+  --header-height: 60px;
+  --top-nav-height: 50px;
+
+  /* 间距 */
+  --content-padding: 20px;
+  --card-spacing: 16px;
+
+  /* 字体 */
+  --font-size-title: 16px;
+  --font-size-body: 14px;
+  --font-size-small: 12px;
+
+  /* 圆角 */
+  --border-radius-base: 4px;
+  --border-radius-lg: 8px;
+
+  /* 阴影 */
+  --shadow-base: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-light: 0 2px 4px rgba(0, 0, 0, 0.04);
+
+  /* 过渡 */
+  --transition-duration: 0.3s;
+  --transition-timing: ease-in-out;
+}
+
+/* 浅色模式 */
+:root,
+html[data-theme="light"] {
+  --bg-color: #f0f2f5;
+  --bg-color-page: #f5f7fa;
+  --sidebar-bg: #ffffff;
+  --sidebar-text: #606266;
+  --sidebar-active-bg: var(--theme-color);
+  --sidebar-active-text: #ffffff;
+  --sidebar-hover-bg: var(--theme-color-light-9);
+  --header-bg: #ffffff;
+  --header-text: #303133;
+  --header-border: #f0f0f0;
+  --card-bg: #ffffff;
+  --text-color-primary: #303133;
+  --text-color-regular: #606266;
+  --text-color-secondary: #909399;
+  --text-color-placeholder: #c0c4cc;
+  --border-color: #dcdfe6;
+  --border-color-light: #e4e7ed;
+  --border-color-lighter: #ebeef5;
+  --fill-color: #f5f7fa;
+  --fill-color-light: #fafafa;
+  --scrollbar-bg: #f0f0f0;
+  --scrollbar-thumb: #c0c4cc;
+  --tooltip-bg: #303133;
+  --tooltip-text: #ffffff;
+}
+
+/* 深色模式 */
+html[data-theme="dark"] {
+  --bg-color: #141414;
+  --bg-color-page: #0a0a0a;
+  --sidebar-bg: #1d1e1f;
+  --sidebar-text: #a3a6ad;
+  --sidebar-active-bg: var(--theme-color);
+  --sidebar-active-text: #ffffff;
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.06);
+  --header-bg: #1d1e1f;
+  --header-text: #e5eaf3;
+  --header-border: #363637;
+  --card-bg: #1d1e1f;
+  --text-color-primary: #e5eaf3;
+  --text-color-regular: #cfd3dc;
+  --text-color-secondary: #a3a6ad;
+  --text-color-placeholder: #6c6e72;
+  --border-color: #4c4d4f;
+  --border-color-light: #414243;
+  --border-color-lighter: #363637;
+  --fill-color: #262727;
+  --fill-color-light: #1d1e1f;
+  --scrollbar-bg: #262727;
+  --scrollbar-thumb: #4c4d4f;
+  --tooltip-bg: #e5eaf3;
+  --tooltip-text: #303133;
+}
+
+/* Element Plus 主题色覆盖 */
+:root {
+  --el-color-primary: var(--theme-color);
+  --el-color-primary-light-3: var(--theme-color-light-3);
+  --el-color-primary-light-5: var(--theme-color-light-5);
+  --el-color-primary-light-7: var(--theme-color-light-7);
+  --el-color-primary-light-8: var(--theme-color-light-8);
+  --el-color-primary-light-9: var(--theme-color-light-9);
+  --el-color-primary-dark-2: var(--theme-color-dark-2);
+  --el-popper-border-radius: 8px;
+  --el-popover-border-radius: 8px;
+}
+
+/* 深色模式 Element Plus 覆盖 */
+html[data-theme="dark"] {
+  --el-bg-color: var(--bg-color);
+  --el-bg-color-page: var(--bg-color-page);
+  --el-bg-color-overlay: var(--card-bg);
+  --el-text-color-primary: var(--text-color-primary);
+  --el-text-color-regular: var(--text-color-regular);
+  --el-text-color-secondary: var(--text-color-secondary);
+  --el-text-color-placeholder: var(--text-color-placeholder);
+  --el-border-color: var(--border-color);
+  --el-border-color-light: var(--border-color-light);
+  --el-border-color-lighter: var(--border-color-lighter);
+  --el-fill-color: var(--fill-color);
+  --el-fill-color-light: var(--fill-color-light);
+  --el-bg-color: #141414;
+  --el-bg-color-page: #0a0a0a;
+  --el-bg-color-overlay: #1d1e1f;
+  --el-mask-color: rgba(0, 0, 0, 0.8);
+}

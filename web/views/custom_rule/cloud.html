@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>平台规则（自定义规则）</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ============================================================
+       平台规则（拦截型 · 云平台下发）弹窗页（iframe，与 add.html 同壳）：
+       列表 + 一键启停 + 立即同步（免等整点小时任务）；免费版限量 10 条由同步侧过滤
+       ============================================================ */
+    html, body { height: 100%; background: var(--bg-card); }
+    #app { height: 100%; }
+    .edit-container { height: 100%; box-sizing: border-box; padding: 16px 20px 0; display: flex; flex-direction: column; }
+    .edit-body { flex: 1; overflow-y: auto; }
+    .edit-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 0 16px; border-top: 1px solid var(--border); margin-top: 8px; }
+
+    .el-button--default { background-color: transparent !important; border-color: var(--border) !important; color: var(--text-secondary) !important; }
+    .el-button--default:hover { background-color: transparent !important; border-color: var(--accent) !important; color: var(--accent) !important; }
+    .el-button--primary { background-color: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="edit-container">
+    <div class="edit-body">
+      <el-alert v-if="!proEdition" type="info" :closable="false" style="margin-bottom:12px;"
+        title="免费版仅展示平台拦截规则子集，升级 Pro 解锁全部平台规则。"></el-alert>
+      <el-table :data="list" size="small" style="width:100%;" empty-text="暂无平台规则（点击下方立即同步拉取）">
+        <el-table-column prop="name" label="规则名称"></el-table-column>
+        <el-table-column label="适用版本" width="100">
+          <template #default="{ row }">{{ row.min_edition === 'pro' ? 'Pro' : '通用' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">{{ row.enabled === 1 ? '已启用' : '已停用' }}</template>
+        </el-table-column>
+        <el-table-column label="启停" width="90">
+          <template #default="{ row }">
+            <el-switch :model-value="row.enabled === 1" @change="v => toggle(row, v)"></el-switch>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+    <div class="edit-footer">
+      <el-button type="primary" :loading="syncing" @click="sync"><i class="fa-solid fa-rotate"></i> 立即同步</el-button>
+      <el-button @click="onClose"><i class="fa-solid fa-xmark"></i> 关闭</el-button>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      list: [],
+      proEdition: false,
+      syncing: false
+    };
+  },
+  mounted() {
+    ThemeManager.init();
+    this.load();
+  },
+  methods: {
+    load() {
+      App.request('/api/cloud_rule/list', { rule_type: 'custom', page: 1, page_size: 100 }).then((res) => {
+        this.list = (res && res.list) || [];
+        this.proEdition = !!(res && res.pro_edition);
+      }).catch(() => {});
+    },
+    /* 立即同步平台规则（免等整点小时任务）：摘要直接提示，列表用本次返回刷新 */
+    sync() {
+      this.syncing = true;
+      App.request('/api/cloud_rule/sync', { rule_type: 'custom' }).then((res) => {
+        this.list = (res && res.list) || [];
+        this.proEdition = !!(res && res.pro_edition);
+        ElementPlus.ElMessage.success('同步完成：' + ((res && res.msg) || '无变更'));
+      }).catch(() => {}).finally(() => { this.syncing = false; });
+    },
+    toggle(row, on) {
+      App.request('/api/cloud_rule/toggle', { id: row.id, enabled: on ? 1 : 0 }).then(() => {
+        row.enabled = on ? 1 : 0;
+        ElementPlus.ElMessage.success(on ? '已启用（即时生效）' : '已停用（即时生效）');
+      }).catch(() => {});
+    },
+    onClose() {
+      // 启停在弹窗内即时生效，父页规则列表不依赖平台规则数据，无需刷新
+      DialogBridge.close({ id: 'cr_cloud', msg: '', refresh: false });
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

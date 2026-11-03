@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>攻击详情</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* 本页由 DialogBridge 以 iframe 弹窗形式加载（标题栏由主框架提供），也可直接访问查看 */
+    /* iframe 页面：填满弹窗高度；底色与 whitelist/add.html 一致（卡片色，浅色主题即白色）；内容区滚动、底部按钮常驻 */
+    html, body { height: 100%; overflow: hidden; background: var(--bg-card); }
+    #app { height: 100%; display: flex; flex-direction: column; }
+    .mono { font-family: "SF Mono", Consolas, Menlo, monospace; color: var(--text-primary); }
+    .ap-detail { flex: 1; overflow-y: auto; padding: 16px 20px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+    .ap-detail .highlight { color: var(--text-primary); font-weight: 600; font-family: "SF Mono", Consolas, monospace; }
+
+    /* 处置动作标签（与攻击日志列表页同一套） */
+    .tag-act-block { background: rgba(239,68,68,0.12); color: #f87171; }
+    .tag-act-challenge { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .tag-act-observe { background: rgba(47,123,246,0.12); color: #60a5fa; }
+    .tag-act-waiting_room { background: rgba(139,92,246,0.12); color: #a78bfa; }
+
+    /* 详情字段 */
+    .detail-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .detail-time { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; }
+    .detail-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 16px; }
+    .detail-list > div { display: flex; flex-direction: column; gap: 3px; }
+    .detail-list > div.full { grid-column: 1 / -1; }
+    .detail-list dt { font-size: 11px; color: var(--text-muted); }
+    .detail-list dd { font-size: 13px; color: var(--text-primary); word-break: break-all; }
+    .uri-break { word-break: break-all; }
+    .detail-section { font-size: 12px; color: var(--text-secondary); margin: 4px 0 8px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .json-block { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; line-height: 1.5; margin-bottom: 16px; }
+
+    /* 底部操作条（吸底） */
+    .ap-footer { flex-shrink: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
+    .ap-tip { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="ap-detail" v-if="row">
+    <div class="detail-meta">
+      <span class="tag" :class="attackTag(row.attack_type)">{{ attackLabel(row.attack_type) }}</span>
+      <span class="tag" :class="actionTag(row.action)">{{ actionLabel(row.action) }}</span>
+      <span class="detail-time"><el-icon :size="12"><component :is="'Clock'"/></el-icon> {{ row.create_time }}</span>
+    </div>
+    <dl class="detail-list">
+      <div><dt>源IP</dt><dd><span class="mono">{{ row.client_ip }}</span><span v-if="row.region" style="color:var(--text-muted);"> ({{ row.region }})</span></dd></div>
+      <div><dt>目标站点</dt><dd>{{ row.site_name || '-' }}</dd></div>
+      <div><dt>匹配规则</dt><dd>{{ row.rule_name || '-' }}</dd></div>
+      <div><dt>验证类型</dt><dd v-if="row.challenge_type"><span class="tag tag-warning">{{ challengeLabel(row.challenge_type) }}</span></dd><dd v-else>-</dd></div>
+      <div><dt>接口类型</dt><dd><span class="tag" :class="row.is_api === 1 ? 'tag-info' : 'tag-neutral'">{{ row.is_api === 1 ? 'API接口' : 'Web页面' }}</span></dd></div>
+      <div><dt>请求方法</dt><dd><span class="tag tag-success">{{ row.method || '-' }}</span></dd></div>
+      <div><dt>处置动作</dt><dd><span class="tag" :class="actionTag(row.action)">{{ actionLabel(row.action) }}</span></dd></div>
+      <div><dt>请求ID</dt><dd class="mono">{{ row.req_id || '-' }}</dd></div>
+      <div class="full"><dt>请求URI</dt><dd class="mono uri-break">{{ row.uri || '-' }}</dd></div>
+      <div class="full"><dt>User-Agent</dt><dd>{{ row.ua || '-' }}</dd></div>
+      <div class="full"><dt>Referer</dt><dd>{{ row.referer || '-' }}</dd></div>
+    </dl>
+    <div v-if="row.headers" class="detail-section"><el-icon :size="13"><component :is="'Tickets'"/></el-icon> 请求头</div>
+    <pre v-if="row.headers" class="json-block">{{ row.headers }}</pre>
+    <template v-if="row.challenge_diag">
+      <div class="detail-section"><el-icon :size="13"><component :is="'Document'"/></el-icon> 人机验证诊断明细</div>
+      <pre class="json-block" style="max-height:320px;">{{ row.challenge_diag }}</pre>
+    </template>
+  </div>
+  <div class="ap-tip" v-else>{{ tip }}</div>
+
+  <div class="ap-footer">
+    <el-button @click="close"><el-icon :size="13" style="margin-right:3px;"><component :is="'Close'"/></el-icon> 关闭</el-button>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+/* 弹窗 id 必须与父页面 DialogBridge.open({ id }) 一致 */
+const DIALOG_ID = 'al_detail';
+
+const app = createApp({
+  data() {
+    return { row: null, tip: '加载中…' };
+  },
+  mounted() {
+    ThemeManager.init();
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (!id) { this.tip = '缺少记录 ID'; return; }
+    App.api.attackLog.detail(id).then((d) => {
+      if (d) { this.row = d; } else { this.tip = '记录不存在或已过期'; }
+    }).catch(() => { this.tip = '加载失败'; });
+  },
+  methods: {
+    /* 在弹窗内 → 通知主框架关闭；被直接打开（无父窗口）→ 返回上一页 */
+    close() {
+      if (window.parent && window.parent !== window) {
+        DialogBridge.close({ id: DIALOG_ID, msg: '', refresh: false });
+        return;
+      }
+      if (history.length > 1) history.back();
+    },
+    attackLabel(v) { return App.ui.attackLabel(v); },
+    actionLabel(v) { return App.ui.actionLabel(v); },
+    attackTag(v) { return App.ui.attackTagClass(v); },
+    actionTag(v) { return App.ui.actionTagClass(v); },
+    challengeLabel(v) { return App.ui.challengeTypeLabel(v); }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

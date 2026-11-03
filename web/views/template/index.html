@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>拦截页面模板</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <link rel="stylesheet" href="../../static/lib/codemirror/codemirror.min.css">
+  <style>
+    /* 模板类型切换条 */
+    .tpl-switch { display: flex; gap: 6px; margin-bottom: 16px; padding: 4px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); flex-wrap: wrap; }
+    .tpl-switch .tpl-tab { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer; background: none; border: none; font-family: var(--font); transition: all 0.15s; }
+    .tpl-switch .tpl-tab:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+    .tpl-switch .tpl-tab.active { background: var(--accent-soft); color: var(--accent); }
+    .tpl-switch .tpl-tab .tab-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; }
+    .tpl-switch .tpl-tab .tab-desc { font-size: 11px; color: var(--text-muted); }
+    /* 模板卡片（单卡片展示） */
+    .tpl-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .tpl-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
+    .tpl-card:hover { transform: translateY(-2px); border-color: var(--border-light); box-shadow: var(--shadow); }
+    .tpl-card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); gap: 10px; }
+    .tpl-name-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .tpl-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .tpl-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tpl-type-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+    .tpl-preview-wrap { position: relative; height: calc(100vh - 340px); min-height: 420px; background: #fff; border-bottom: 1px solid var(--border); overflow: hidden; cursor: pointer; }
+    .tpl-preview-wrap iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+    .tpl-preview-mask { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: flex-start; justify-content: flex-end; padding: 10px; }
+    .tpl-preview-mask .zoom-tip { opacity: 0; transition: opacity 0.2s; color: #fff; background: rgba(0,0,0,0.6); padding: 5px 12px; border-radius: 14px; font-size: 12px; display: flex; align-items: center; gap: 5px; pointer-events: none; }
+    .tpl-card:hover .tpl-preview-mask .zoom-tip { opacity: 1; }
+    .tpl-card-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
+
+    /* 全屏编辑器 */
+    .editor-mask { position: fixed; inset: 0; background: var(--bg-body); z-index: 1000; display: none; flex-direction: column; }
+    .editor-mask.show { display: flex; }
+    .editor-header { height: var(--topbar-height); background: var(--bg-sidebar); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; flex-shrink: 0; gap: 12px; }
+    .eh-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .eh-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .eh-title { font-size: 15px; font-weight: 600; white-space: nowrap; }
+    .eh-type { font-size: 11px; color: var(--text-muted); padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px; white-space: nowrap; }
+    .eh-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .editor-body { flex: 1; display: flex; min-height: 0; }
+    .editor-left { width: 50%; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; }
+    .editor-right { width: 50%; display: flex; flex-direction: column; min-width: 0; }
+    .editor-sub-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg-card); flex-shrink: 0; gap: 10px; }
+    .esh-label { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+    .esh-label i { color: var(--accent); }
+    .editor-name-row input { background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: var(--font); padding: 6px 10px; width: 220px; outline: none; }
+    .editor-name-row input:focus { border-color: var(--accent); }
+    /* 变量提示 */
+    .var-hints { padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg-card); flex-shrink: 0; }
+    .vh-title { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .var-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .var-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-secondary); cursor: pointer; font-family: "SF Mono", Consolas, monospace; transition: all 0.15s; }
+    .var-chip:hover { border-color: var(--accent); color: var(--accent); }
+    /* 代码编辑器 */
+    .code-area-wrap { flex: 1; display: flex; min-height: 0; }
+    .code-editor { flex: 1; width: 100%; background: #0a0e14; color: #e6edf3; border: 0; outline: none; resize: none; font-family: "SF Mono", "Consolas", "Monaco", monospace; font-size: 12.5px; line-height: 1.6; padding: 14px 16px; tab-size: 4; white-space: pre; overflow: auto; }
+    /* 预览 */
+    .preview-wrap { flex: 1; position: relative; background: #fff; min-height: 0; }
+    .preview-wrap iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+    .preview-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg-card); flex-shrink: 0; }
+    .pt-label { font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+    .device-btn { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); cursor: pointer; padding: 4px 8px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+    .device-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .device-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .preview-stage { flex: 1; display: flex; justify-content: center; align-items: flex-start; overflow: auto; padding: 12px; background: var(--bg-body); }
+    .preview-stage iframe.pc { width: 100%; max-width: 980px; height: 100%; }
+    .preview-stage iframe.mobile { width: 375px; height: 100%; }
+
+    /* 弹窗 */
+    .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1100; display: none; align-items: center; justify-content: center; }
+    .modal-mask.show { display: flex; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); width: 400px; max-width: 92%; box-shadow: var(--shadow); animation: modalIn 0.2s ease; }
+    .modal.wide { width: 580px; max-width: 94%; }
+    @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .modal-title { font-size: 14px; font-weight: 600; }
+    .modal-body { padding: 18px 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+    .modal-body .del-name { color: var(--text-primary); font-weight: 600; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 18px; border-top: 1px solid var(--border); }
+    /* 导入弹窗 */
+    .import-tabs { display: flex; gap: 4px; background: var(--bg-body); padding: 3px; border-radius: 8px; margin-bottom: 14px; }
+    .import-tabs .itab { flex: 1; padding: 7px; border-radius: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer; background: none; border: none; font-family: var(--font); transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+    .import-tabs .itab.active { background: var(--accent); color: #fff; }
+    .file-drop { border: 2px dashed var(--border-light); border-radius: 8px; padding: 28px 16px; text-align: center; color: var(--text-muted); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .file-drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .file-drop input { display: none; }
+    .file-name { color: var(--accent); font-size: 12px; margin-top: 6px; }
+    /* 文本域（导入粘贴） */
+    .form-textarea { font-family: "SF Mono", Consolas, monospace; font-size: 12px; min-height: 200px; }
+
+    @media (max-width: 900px) {
+      .editor-left, .editor-right { width: 100%; }
+      .editor-body { flex-direction: column; }
+      .editor-left { border-right: 0; border-bottom: 1px solid var(--border); }
+    }
+
+    /* ===== CodeMirror 编辑器适配（深浅主题） ===== */
+    .code-area-wrap { overflow: hidden; }
+    .code-area-wrap .CodeMirror {
+      height: 100%; min-height: 440px; border: 1px solid var(--border); border-radius: 8px;
+      font-family: "SF Mono", Consolas, "JetBrains Mono", monospace; font-size: 13px;
+      background: var(--bg-card); color: var(--text-primary);
+    }
+    .code-area-wrap .CodeMirror-lines { padding: 8px 0; }
+    .code-area-wrap .CodeMirror pre.CodeMirror-line,
+    .code-area-wrap .CodeMirror pre.CodeMirror-line-like { color: var(--text-primary); }
+    .code-area-wrap .CodeMirror-gutters { background: var(--bg-body); border-right: 1px solid var(--border); }
+    .code-area-wrap .CodeMirror-linenumber { color: var(--text-muted); }
+    .code-area-wrap .CodeMirror-cursor { border-left: 2px solid var(--text-primary); }
+    .code-area-wrap .CodeMirror-selected { background: rgba(37, 99, 235, 0.18); }
+    .code-area-wrap .CodeMirror-activeline-background { background: rgba(100, 116, 139, 0.08); }
+    html[data-theme="dark"] .code-area-wrap .CodeMirror-activeline-background { background: rgba(255, 255, 255, 0.04); }
+    /* Go 模板占位符 {{ }} 高亮 */
+    .code-area-wrap .cm-string-2 { color: var(--accent); font-weight: 600; }
+html[data-theme="dark"] .code-area-wrap .cm-string-2 { color: #7dd3fc; }
+    /* HTML/JS/CSS 语法 token 配色（深浅均清晰） */
+    .code-area-wrap .cm-tag { color: #d4625a; }
+html[data-theme="dark"] .code-area-wrap .cm-tag { color: #f87c70; }
+    .code-area-wrap .cm-attribute { color: #9a6a3f; }
+html[data-theme="dark"] .code-area-wrap .cm-attribute { color: #e5b567; }
+    .code-area-wrap .cm-string { color: #4e9a06; }
+html[data-theme="dark"] .code-area-wrap .cm-string { color: #b5bd68; }
+    .code-area-wrap .cm-keyword { color: #4074e0; }
+html[data-theme="dark"] .code-area-wrap .cm-keyword { color: #8ab4f8; }
+    .code-area-wrap .cm-comment { color: #9aa0a6; font-style: italic; }
+    .code-area-wrap .cm-number { color: #d4625a; }
+html[data-theme="dark"] .code-area-wrap .cm-number { color: #f087a0; }
+    .code-area-wrap .cm-property { color: #5a78d4; }
+html[data-theme="dark"] .code-area-wrap .cm-property { color: #92b4f0; }
+    .code-area-wrap .cm-bracket { color: var(--text-muted); }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="layout">
+    <div class="main">
+      <div class="content">
+        <div class="section-title">拦截页面模板 <span class="sub">自定义WAF触发拦截/验证/排队/错误时返回的页面内容</span></div>
+
+        <!-- 模板类型切换条：只加载当前选中的模板，节省性能 -->
+        <div class="tpl-switch">
+          <button v-for="m in meta" :key="m.type" class="tpl-tab" :class="{ active: current === m.type }" @click="selectType(m.type)">
+            <el-icon :size="14" style="color:var(--accent);"><component :is="m.icon"/></el-icon>
+            <span>{{ m.name }}</span>
+            <span class="tab-badge" :class="m.badge">{{ m.type }}</span>
+            <span class="tab-desc">{{ m.desc }}</span>
+          </button>
+        </div>
+
+        <!-- 当前选中模板卡片 -->
+        <div class="tpl-grid">
+          <div class="tpl-card">
+            <div class="tpl-card-head">
+              <div class="tpl-name-wrap">
+                <div class="tpl-icon" :class="curMeta.iconCls"><el-icon :size="15"><component :is="curMeta.icon"/></el-icon></div>
+                <span class="tpl-name">{{ curTpl.name || curMeta.name }}</span>
+                <span class="tpl-type-badge" :class="curTpl.is_default ? 'tag-muted' : 'tag-custom'">{{ curTpl.is_default ? '默认' : '自定义' }}</span>
+              </div>
+              <el-select v-if="curList.length > 1" v-model="currentTplId" size="small" style="width:220px;" placeholder="切换模板">
+                <el-option v-for="t in curList" :key="t.id" :value="t.id" :label="t.name + (t.is_default ? '（默认）' : '')"></el-option>
+              </el-select>
+              <span v-else class="tpl-type-badge" :class="curMeta.badge">{{ current }}</span>
+            </div>
+            <div class="tpl-preview-wrap" @click="openEditor" :title="'点击编辑'">
+              <iframe :srcdoc="previewHtml" sandbox="allow-same-origin allow-scripts"></iframe>
+              <div class="tpl-preview-mask"><span class="zoom-tip"><el-icon :size="12"><component :is="'EditPen'"/></el-icon> 点击编辑</span></div>
+            </div>
+            <div class="tpl-card-foot">
+              <el-button size="small" @click="openEditor"><el-icon :size="12" style="margin-right:3px;"><component :is="'EditPen'"/></el-icon> 编辑</el-button>
+              <el-button size="small" @click="openImport"><el-icon :size="12" style="margin-right:3px;"><component :is="'Upload'"/></el-icon> 导入</el-button>
+              <el-button size="small" @click="exportTemplate"><el-icon :size="12" style="margin-right:3px;"><component :is="'Download'"/></el-icon> 导出</el-button>
+              <el-button size="small" type="danger" @click="openReset"><el-icon :size="12" style="margin-right:3px;"><component :is="'RefreshLeft'"/></el-icon> 恢复默认</el-button>
+              <template v-if="isPro">
+                <el-button size="small" type="primary" plain @click="openCreate"><el-icon :size="12" style="margin-right:3px;"><component :is="'Plus'"/></el-icon> 新建模板</el-button>
+                <el-button v-if="curTpl && !curTpl.is_default && curTpl.id > 0" size="small" type="danger" plain @click="openDelete"><el-icon :size="12" style="margin-right:3px;"><component :is="'Delete'"/></el-icon> 删除</el-button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- 全屏编辑器 -->
+<div class="editor-mask" :class="{ show: editor.show }">
+  <div class="editor-header">
+    <div class="eh-left">
+      <div class="eh-icon icon-blue"><el-icon :size="15"><component :is="'EditPen'"/></el-icon></div>
+      <span class="eh-title">编辑{{ editor.name }}</span>
+      <span class="eh-type">{{ editor.type }}</span>
+    </div>
+    <div class="eh-right">
+      <el-button @click="closeEditor"><el-icon :size="13" style="margin-right:3px;"><component :is="'Close'"/></el-icon> 取消</el-button>
+      <el-button type="primary" :disabled="editor.saving" @click="saveEditor"><el-icon :size="13" style="margin-right:3px;"><component :is="'Check'"/></el-icon> 保存</el-button>
+    </div>
+  </div>
+  <div class="editor-body">
+    <div class="editor-left">
+      <div class="editor-sub-head">
+        <span class="esh-label"><el-icon :size="12"><component :is="'Tag'"/></el-icon> 模板名称</span>
+        <div class="editor-name-row">
+          <el-form :model="{}" label-position="top" @submit.prevent>
+            <el-input v-model="editor.name" placeholder="请输入模板名称" style="width:220px;"></el-input>
+          </el-form>
+        </div>
+      </div>
+      <div class="var-hints">
+        <div class="vh-title"><el-icon :size="12"><component :is="'InfoFilled'"/></el-icon> 可用变量（点击插入到光标处）</div>
+        <div class="var-chips">
+          <span v-for="v in variables" :key="v.name" class="var-chip" :title="v.desc" @click="insertVar(v.name)">{{ v.name }} <span style="color:var(--text-muted);margin-left:4px;">{{ v.desc }}</span></span>
+        </div>
+      </div>
+      <div class="code-area-wrap">
+        <textarea ref="codeEditor" class="code-editor" spellcheck="false" placeholder="在此输入HTML模板代码..."></textarea>
+      </div>
+    </div>
+    <div class="editor-right">
+      <div class="preview-toolbar">
+        <span class="pt-label"><el-icon :size="12"><component :is="'View'"/></el-icon> 实时预览</span>
+        <button class="device-btn" :class="{ active: device === 'pc' }" @click="device = 'pc'"><el-icon :size="12"><component :is="'Monitor'"/></el-icon> 桌面</button>
+        <button class="device-btn" :class="{ active: device === 'mobile' }" @click="device = 'mobile'"><el-icon :size="12"><component :is="'Iphone'"/></el-icon> 移动</button>
+        <span class="pt-label" style="margin-left:auto;">变量已替换为示例值</span>
+      </div>
+      <div class="preview-stage">
+        <iframe :class="device" :srcdoc="editorPreview" sandbox="allow-same-origin allow-scripts"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 导入弹窗 -->
+<div class="modal-mask" :class="{ show: importModal.show }" @click.self="closeImport">
+  <div class="modal wide">
+    <div class="modal-header">
+      <div class="modal-icon icon-cyan"><el-icon :size="15"><component :is="'Upload'"/></el-icon></div>
+      <span class="modal-title">导入模板 - <span style="color:var(--text-primary);">{{ importModal.name }}</span></span>
+    </div>
+    <div class="modal-body">
+      <div class="import-tabs">
+        <button class="itab" :class="{ active: importModal.mode === 'paste' }" @click="importModal.mode = 'paste'"><el-icon :size="12"><component :is="'Document'"/></el-icon> 粘贴HTML</button>
+        <button class="itab" :class="{ active: importModal.mode === 'file' }" @click="importModal.mode = 'file'"><el-icon :size="12"><component :is="'Upload'"/></el-icon> 上传文件</button>
+      </div>
+      <div v-if="importModal.mode === 'paste'">
+        <el-form :model="{}" label-position="top" @submit.prevent="confirmImport">
+          <el-form-item label="HTML 内容 *" style="margin-bottom:0;">
+            <el-input type="textarea" :rows="10" v-model="importModal.content" placeholder="粘贴完整的HTML模板代码..."></el-input>
+            <div class="form-hint">将完整覆盖当前模板内容，支持包含 <span class="mono" v-pre>{{ .变量 }}</span> 占位符。</div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <div v-else>
+        <div class="file-drop" @click="$refs.importFile.click()"
+          @dragover.prevent="fileDrag = true" @dragleave.prevent="fileDrag = false" @drop.prevent="onFileDrop"
+          :style="fileDrag ? 'border-color:var(--accent);background:var(--accent-soft);' : ''">
+          <el-icon :size="28" style="margin-bottom:8px;display:block;"><component :is="'UploadFilled'"/></el-icon>
+          <div>点击选择或拖拽 .html 文件到此处</div>
+          <div class="file-name">{{ importModal.fileName }}</div>
+          <input type="file" ref="importFile" class="hidden-file" accept=".html,.htm,text/html" @change="onFileSelect">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <el-button @click="closeImport"><el-icon :size="13" style="margin-right:3px;"><component :is="'Close'"/></el-icon> 取消</el-button>
+      <el-button type="primary" :disabled="importModal.saving" @click="confirmImport"><el-icon :size="13" style="margin-right:3px;"><component :is="'Check'"/></el-icon> 导入</el-button>
+    </div>
+  </div>
+</div>
+
+<!-- 恢复默认确认弹窗 -->
+<div class="modal-mask" :class="{ show: resetModal.show }" @click.self="resetModal.show = false">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon icon-orange"><el-icon :size="15"><component :is="'WarningFilled'"/></el-icon></div>
+      <span class="modal-title">恢复默认模板</span>
+    </div>
+    <div class="modal-body">确定要将 <span class="del-name">{{ resetModal.name }}</span> 恢复为默认内容吗？<br>当前自定义内容将被覆盖，此操作不可撤销。</div>
+    <div class="modal-footer">
+      <el-button @click="resetModal.show = false">取消</el-button>
+      <el-button type="danger" :disabled="resetModal.saving" @click="confirmReset"><el-icon :size="12" style="margin-right:3px;"><component :is="'RefreshLeft'"/></el-icon> 确认恢复</el-button>
+    </div>
+  </div>
+</div>
+
+<!-- 新建模板弹窗（Pro） -->
+<div class="modal-mask" :class="{ show: createModal.show }" @click.self="createModal.show = false">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon icon-blue"><el-icon :size="15"><component :is="'Plus'"/></el-icon></div>
+      <span class="modal-title">新建模板 - {{ curMeta.name }}</span>
+    </div>
+    <div class="modal-body">
+      <el-form :model="{}" label-position="top" @submit.prevent="confirmCreate">
+        <el-form-item label="模板名称 *" style="margin-bottom:0;">
+          <el-input v-model="createModal.name" placeholder="请输入模板名称，如：活动期拦截页"></el-input>
+          <div class="form-hint">将以「{{ curMeta.name }}」默认模板内容为起点创建副本，创建后可在站点编辑页按站点选用</div>
+        </el-form-item>
+      </el-form>
+    </div>
+    <div class="modal-footer">
+      <el-button @click="createModal.show = false">取消</el-button>
+      <el-button type="primary" :disabled="createModal.saving" @click="confirmCreate"><el-icon :size="12" style="margin-right:3px;"><component :is="'Check'"/></el-icon> 创建</el-button>
+    </div>
+  </div>
+</div>
+
+<!-- 删除模板确认弹窗（Pro） -->
+<div class="modal-mask" :class="{ show: deleteModal.show }" @click.self="deleteModal.show = false">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon icon-orange"><el-icon :size="15"><component :is="'WarningFilled'"/></el-icon></div>
+      <span class="modal-title">删除模板</span>
+    </div>
+    <div class="modal-body">确定要删除 <span class="del-name">{{ deleteModal.name }}</span> 吗？<br>选用该模板的站点将自动回退为默认模板，此操作不可撤销。</div>
+    <div class="modal-footer">
+      <el-button @click="deleteModal.show = false">取消</el-button>
+      <el-button type="danger" :disabled="deleteModal.saving" @click="confirmDelete"><el-icon :size="12" style="margin-right:3px;"><component :is="'Delete'"/></el-icon> 确认删除</el-button>
+    </div>
+  </div>
+</div>
+</div><!-- /#app -->
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/lib/codemirror/codemirror.min.js"></script>
+<script src="../../static/lib/codemirror/mode/xml/xml.min.js"></script>
+<script src="../../static/lib/codemirror/mode/javascript/javascript.min.js"></script>
+<script src="../../static/lib/codemirror/mode/css/css.min.js"></script>
+<script src="../../static/lib/codemirror/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="../../static/lib/codemirror/addon/edit/closetag.min.js"></script>
+<script src="../../static/lib/codemirror/addon/edit/matchtags.min.js"></script>
+<script src="../../static/lib/codemirror/addon/fold/foldcode.min.js"></script>
+<script src="../../static/lib/codemirror/addon/fold/xml-fold.min.js"></script>
+<script src="../../static/lib/codemirror/addon/selection/active-line.min.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script src="../../static/js/config/default_templates.js"></script>
+<script>
+const { createApp } = Vue;
+
+/* ===== 可用变量 ===== */
+const VARIABLES = [
+  { name: '{{.SiteName}}',   desc: '站点名称' },
+  { name: '{{.RequestID}}',  desc: '请求编号' },
+  { name: '{{.Reason}}',     desc: '拦截原因' },
+  { name: '{{.ClientIP}}',   desc: '客户端IP' },
+  { name: '{{.Time}}',       desc: '触发时间' },
+  { name: '{{.Position}}',   desc: '排队位置' },
+  { name: '{{.FrontCount}}', desc: '前方人数' },
+  { name: '{{.LogoURL}}',   desc: '站点Logo地址' },
+  { name: '{{.ChallengeID}}', desc: '人机验证会话ID' }
+];
+/* 预览用示例值 */
+const SAMPLE = {
+  '{{.SiteName}}': '官网主站',
+  '{{.RequestID}}': 'req-20260812-0001',
+  '{{.Reason}}': 'SQL注入特征匹配',
+  '{{.ClientIP}}': '203.0.113.45',
+  '{{.Time}}': '2026-08-12 14:30:00',
+  '{{.Position}}': '12',
+  '{{.FrontCount}}': '8',
+  '{{.LogoURL}}': '/static/images/sample-logo.svg',
+  '{{.ChallengeID}}': 'cha-20260818-demo'
+};
+
+/* 默认模板已外置为 web/static/js/config/default_templates.js */
+
+const app = createApp({
+  data() {
+    return {
+      meta: [
+        { type: 'block', name: '拦截页', defaultName: '拦截页', icon: 'Lock', iconCls: 'icon-red', badge: 'tag-danger', desc: '自定义规则拦截时展示（403）' },
+        { type: 'silent_challenge', name: '静默JS挑战页', defaultName: '静默JS挑战页', icon: 'Lightning', iconCls: 'icon-orange', badge: 'tag-warning', desc: 'JS静默挑战全量关卡展示' },
+        { type: 'slider', name: '滑块验证页', defaultName: '滑块验证页', icon: 'Switch', iconCls: 'icon-blue', badge: 'tag-custom', desc: '滑块拖条验证展示' },
+        { type: 'captcha', name: '图形验证码页', defaultName: '图形验证码页', icon: 'Grid', iconCls: 'icon-green', badge: 'tag-success', desc: '输入图形字符验证展示' },
+        { type: 'puzzle', name: '拼图验证页', defaultName: '拼图验证页', icon: 'Crop', iconCls: 'icon-purple', badge: 'tag-custom', desc: '拖动滑块拼图验证展示' },
+        { type: 'waiting_room', name: '等候室排队页', defaultName: '等候室排队页', icon: 'Timer', iconCls: 'icon-blue', badge: 'tag-custom', desc: '进入排队等候室时展示' },
+        { type: 'overload', name: '过载拦截页', defaultName: '过载拦截页', icon: 'User', iconCls: 'icon-orange', badge: 'tag-warning', desc: '等候室坐席已满时展示（503）' },
+        { type: 'server_error', name: '源站不可用页', defaultName: '源站不可用页', icon: 'Monitor', iconCls: 'icon-cyan', badge: 'tag-other', desc: '源站无法连接时展示' },
+        { type: 'browser_guide', name: '浏览器引导页', defaultName: '浏览器引导页', icon: 'Compass', iconCls: 'icon-blue', badge: 'tag-custom', desc: 'IE内核访客引导：提示切极速模式' },
+        { type: 'ie_captcha', name: 'IE专项验证页', defaultName: 'IE专项验证页', icon: 'Shield', iconCls: 'icon-green', badge: 'tag-success', desc: 'IE内核访客专项验证（需系统设置开启）' }
+      ],
+      current: 'block',
+      currentTplId: 0,        // 当前编辑的模板ID（同类型多模板，Pro 按站点定制）
+      tplList: {},            // type -> [{ id, name, content, is_default }]
+      isPro: false,           // 页面模板按站点定制能力（capabilities.per_site_template）
+      device: 'pc',
+      variables: VARIABLES,
+      editor: { show: false, type: '', name: '', content: '', saving: false },
+      importModal: { show: false, type: '', name: '', mode: 'paste', content: '', fileName: '', saving: false },
+      resetModal: { show: false, type: '', name: '', saving: false },
+      createModal: { show: false, type: '', name: '', saving: false },
+      deleteModal: { show: false, name: '', saving: false },
+      fileDrag: false,
+      cm: null
+    };
+  },
+  computed: {
+    curMeta() { return this.meta.find(m => m.type === this.current) || this.meta[0]; },
+    curList() { return this.tplList[this.current] || []; },
+    curTpl() {
+      const arr = this.curList;
+      return arr.find(x => x.id === this.currentTplId) || arr.find(x => x.is_default) || arr[0] || { id: 0, name: '', content: '', is_default: true };
+    },
+    previewHtml() {
+      const t = this.curTpl;
+      return t && t.content ? this.fillSample(t.content) : '';
+    },
+    editorPreview() {
+      return this.fillSample(this.editor.content || '');
+    }
+  },
+  mounted() {
+    ThemeManager.init();
+    // 页面模板按站点定制能力（Pro 独占）：驱动新建/删除按钮显隐
+    App.loadInfo().then((info) => {
+      const caps = (info && info.capabilities) || {};
+      this.isPro = !!caps.per_site_template;
+    });
+    this.load();
+  },
+  methods: {
+    fillSample(html) {
+      let out = html;
+      // Go 模板块语法：预览按“有Logo”场景渲染（icon 隐藏、logo 显示）
+      out = out.replace(/\{\{if not \.LogoURL\}\}[\s\S]*?\{\{end\}\}/g, '');
+      out = out.replace(/\{\{if \.LogoURL\}\}/g, '').replace(/\{\{end\}\}/g, '');
+      Object.keys(SAMPLE).forEach(k => { out = out.split(k).join(SAMPLE[k]); });
+      return out.replace('<head>', '<head><script>window.__WAF_PREVIEW__=1<\/script>');
+    },
+    load() {
+      return App.api.template.list().then((list) => {
+        const byType = {};
+        (list || []).forEach(t => {
+          if (!byType[t.type]) byType[t.type] = [];
+          byType[t.type].push({ id: t.id, name: t.name, content: t.content || '', is_default: t.is_default === 1 });
+        });
+        this.meta.forEach(m => {
+          let arr = byType[m.type] || [];
+          // 默认模板在前，自定义模板按 id 升序
+          arr.sort((a, b) => (b.is_default - a.is_default) || (a.id - b.id));
+          if (!arr.length) {
+            // 该类型尚未入库：用出厂默认模板兜底展示（保存时要求已初始化）
+            arr = [{ id: 0, name: m.defaultName, content: DEFAULT_TEMPLATES[m.type] || '', is_default: true }];
+          }
+          this.tplList[m.type] = arr;
+          const def = arr.find(x => x.is_default) || arr[0];
+          m.name = def.name || m.defaultName;
+        });
+        // 当前编辑对象失效（已删除等）→ 回到默认模板
+        if (!this.curList.find(x => x.id === this.currentTplId)) {
+          const d = this.curList.find(x => x.is_default) || this.curList[0];
+          this.currentTplId = d ? d.id : 0;
+        }
+      }).catch(() => {});
+    },
+    selectType(t) {
+      this.current = t;
+      const d = this.curList.find(x => x.is_default) || this.curList[0];
+      this.currentTplId = d ? d.id : 0;
+    },
+    openEditor() {
+      const t = this.curTpl;
+      this.editor = { show: true, type: this.current, name: t.name || '', content: t.content || '', saving: false };
+      this.$nextTick(() => this.initEditor());
+    },
+    closeEditor() { this.editor.show = false; },
+    createEditor() {
+      const host = this.$refs.codeEditor;
+      if (!host || typeof CodeMirror === 'undefined') { return false; }
+      const cm = CodeMirror.fromTextArea(host, {
+        mode: 'htmlmixed',
+        lineNumbers: true,
+        indentUnit: 2,
+        tabSize: 2,
+        indentWithTabs: false,
+        autoCloseTags: true,
+        matchTags: { bothTags: true },
+        styleActiveLine: true,
+        viewportMargin: Infinity
+      });
+      // Go 模板占位符 {{ }} 高亮
+      cm.addOverlay({
+        token: function (stream) {
+          if (stream.match(/^\{\{/, false)) {
+            const idx = stream.string.indexOf('}}', stream.pos);
+            if (idx !== -1) { stream.pos = idx + 2; } else { stream.skipToEnd(); }
+            return 'string-2';
+          }
+          while (stream.next() != null && !stream.match(/^\{\{/, false)) {}
+          return null;
+        }
+      });
+      cm.on('change', (inst) => { this.editor.content = inst.getValue(); });
+      this.cm = cm;
+      return true;
+    },
+    initEditor() {
+      if (!this.cm && !this.createEditor()) { return; }
+      this.cm.setValue(this.editor.content || '');
+      this.cm.clearHistory();
+      this.cm.refresh();
+      this.cm.focus();
+    },
+    insertVar(name) {
+      if (this.cm) {
+        this.cm.replaceSelection(name, 'around');
+        this.cm.focus();
+        return;
+      }
+      const ta = this.$refs.codeEditor;
+      const v = this.editor.content;
+      const start = ta ? ta.selectionStart : v.length;
+      const end = ta ? ta.selectionEnd : v.length;
+      this.editor.content = v.slice(0, start) + name + v.slice(end);
+      this.$nextTick(() => { if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = start + name.length; } });
+    },
+    saveEditor() {
+      const c = this.editor.content.trim();
+      if (!this.editor.name.trim()) { ElementPlus.ElMessage.warning('请输入模板名称'); return; }
+      if (!c) { ElementPlus.ElMessage.warning('模板内容不能为空'); return; }
+      const t = this.curTpl;
+      if (!t || !t.id) { ElementPlus.ElMessage.warning('该类型模板尚未初始化，请先执行对应升级 SQL 入库（见 sql/ 目录）'); return; }
+      this.editor.saving = true;
+      App.api.template.save(t.id, c, this.editor.name.trim()).then(() => {
+        t.name = this.editor.name.trim(); t.content = c;
+        ElementPlus.ElMessage.success('保存成功');
+        this.editor.show = false;
+      }).finally(() => this.editor.saving = false);
+    },
+    exportTemplate() {
+      const t = this.curTpl || {};
+      if (!t.content) { ElementPlus.ElMessage.warning('模板内容为空'); return; }
+      const blob = new Blob([t.content], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = this.current + '.html';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      ElementPlus.ElMessage.success('已导出 ' + this.current + '.html');
+    },
+    openImport() {
+      const t = this.curTpl;
+      this.importModal = { show: true, type: this.current, name: t.name || '', mode: 'paste', content: '', fileName: '', saving: false };
+    },
+    closeImport() { this.importModal.show = false; this.fileDrag = false; },
+    onFileSelect(e) {
+      const file = e.target.files[0];
+      this.readImportFile(file);
+      e.target.value = '';
+    },
+    onFileDrop(e) {
+      this.fileDrag = false;
+      const file = e.dataTransfer.files[0];
+      if (file) this.readImportFile(file);
+    },
+    readImportFile(file) {
+      if (!file) return;
+      if (!/\.(html?|htm)$/i.test(file.name)) { ElementPlus.ElMessage.error('请上传 .html 文件'); return; }
+      const reader = new FileReader();
+      reader.onload = ev => { this.importModal.fileName = file.name; this.importModal.content = ev.target.result; };
+      reader.onerror = () => ElementPlus.ElMessage.error('文件读取失败');
+      reader.readAsText(file, 'UTF-8');
+    },
+    confirmImport() {
+      const c = this.importModal.content.trim();
+      if (!c) { ElementPlus.ElMessage.warning(this.importModal.mode === 'paste' ? '请粘贴HTML内容' : '请先选择或拖入文件'); return; }
+      const t = this.curTpl;
+      if (!t || !t.id) { ElementPlus.ElMessage.warning('该类型模板尚未初始化，请先执行对应升级 SQL 入库（见 sql/ 目录）'); return; }
+      this.importModal.saving = true;
+      App.api.template.save(t.id, c, '').then(() => {
+        t.content = c;
+        ElementPlus.ElMessage.success('导入成功');
+        this.importModal.show = false;
+      }).finally(() => this.importModal.saving = false);
+    },
+    openReset() {
+      const t = this.curTpl;
+      this.resetModal = { show: true, type: this.current, name: t.name || '', saving: false };
+    },
+    confirmReset() {
+      const type = this.resetModal.type;
+      const def = DEFAULT_TEMPLATES[type] || '';
+      const t = this.curTpl;
+      if (!t || !t.id) { ElementPlus.ElMessage.warning('该类型模板尚未初始化，请先执行对应升级 SQL 入库（见 sql/ 目录）'); this.resetModal.show = false; return; }
+      this.resetModal.saving = true;
+      App.api.template.save(t.id, def, '').then(() => {
+        t.content = def;
+        this.resetModal.show = false;
+        ElementPlus.ElMessage.success('已恢复默认');
+      }).finally(() => this.resetModal.saving = false);
+    },
+    /* ===== 新建/删除自定义模板（Pro 按站点定制） ===== */
+    openCreate() {
+      this.createModal = { show: true, type: this.current, name: '', saving: false };
+    },
+    confirmCreate() {
+      const name = this.createModal.name.trim();
+      if (!name) { ElementPlus.ElMessage.warning('请输入模板名称'); return; }
+      this.createModal.saving = true;
+      App.api.template.create(this.createModal.type, name).then((d) => {
+        this.createModal.show = false;
+        const newId = (d && d.id) || 0;
+        return this.load().then(() => { if (newId) this.currentTplId = newId; });
+      }).then(() => ElementPlus.ElMessage.success('创建成功'))
+        .catch(() => {})
+        .finally(() => this.createModal.saving = false);
+    },
+    openDelete() {
+      const t = this.curTpl;
+      if (!t || t.is_default || !t.id) return;
+      this.deleteModal = { show: true, name: t.name || '', saving: false };
+    },
+    confirmDelete() {
+      const t = this.curTpl;
+      if (!t || !t.id) return;
+      this.deleteModal.saving = true;
+      App.api.template.remove(t.id).then(() => {
+        this.deleteModal.show = false;
+        return this.load().then(() => { this.selectType(this.current); });
+      }).then(() => ElementPlus.ElMessage.success('已删除'))
+        .catch(() => {})
+        .finally(() => this.deleteModal.saving = false);
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

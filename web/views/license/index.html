@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>授权管理</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ===== 设置容器（铺满，对齐系统设置/安全凭证页全宽布局） ===== */
+    .settings-container { width: 100%; }
+    .settings-container > .card { margin-bottom: 18px; }
+    .mono { font-family: "SF Mono", Consolas, monospace; }
+    /* 授权码 textarea 等宽字体（el-input 内部元素） */
+    .lic-form .el-textarea__inner { font-family: "SF Mono", Consolas, monospace; }
+    /* ===== 徽标（对齐 system 页 ver-badge） ===== */
+    .ver-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; line-height: 1.6; border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-input); }
+    .ver-badge.pro { border-color: rgba(139,92,246,0.45); color: #a78bfa; background: rgba(139,92,246,0.10); }
+    .ver-badge.state-expired { border-color: rgba(239,68,68,0.45); color: #f87171; background: rgba(239,68,68,0.10); }
+    .ver-badge.state-grace { border-color: rgba(245,158,11,0.45); color: #fbbf24; background: rgba(245,158,11,0.10); }
+    .ver-badge.state-valid { border-color: rgba(34,197,94,0.45); color: #4ade80; background: rgba(34,197,94,0.10); }
+    /* ===== 激活卡操作区（按钮间距 + 分隔线，对齐 system 页 card-actions） ===== */
+    .card-actions.lic-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border); }
+    .card-actions.lic-actions .el-button + .el-button { margin-left: 0; }
+
+    /* ===== 返回条 ===== */
+    .back-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .back-bar a { font-size: 13px; color: var(--text-secondary); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .back-bar a:hover { color: var(--accent); }
+    .back-bar .back-crumb { font-size: 12px; color: var(--text-muted); }
+
+    /* ===== 状态网格（对齐 system 页 ver-grid：三列 k/v） ===== */
+    .ver-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 24px; }
+    .ver-item { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); }
+    .ver-item .k { font-size: 11px; color: var(--text-muted); }
+    .ver-item .v { font-size: 13px; color: var(--text-primary); word-break: break-all; }
+    .ver-item.full { grid-column: 1 / -1; }
+    /* 指纹行：等宽字体 + 复制按钮 */
+    .fp-row { display: flex; align-items: center; gap: 10px; }
+    .fp-row .v { flex: 1; }
+    .fp-copy { flex-shrink: 0; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-secondary); border-radius: 6px; padding: 2px 10px; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+    .fp-copy:hover { color: var(--accent); border-color: var(--accent); }
+    /* ===== 三态横幅（对齐 system 页 info-banner 内联风格） ===== */
+    .info-banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; font-size: 12px; line-height: 1.6; }
+    .info-banner i { margin-top: 2px; }
+    .info-banner.danger { color: #f87171; background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.35); }
+    .info-banner.grace { color: #fbbf24; background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.35); }
+    /* ===== 激活卡 ===== */
+    .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
+    .step { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--text-secondary); line-height: 1.6; background: var(--bg-input); }
+    .step b { display: flex; align-items: center; color: var(--text-primary); margin-bottom: 4px; font-size: 12px; }
+    .step .no { display: inline-flex; width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; margin-right: 6px; flex-shrink: 0; }
+    @media (max-width: 768px) { .ver-grid { grid-template-columns: repeat(2, 1fr); } .steps { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="layout">
+    <div class="main">
+      <div class="content">
+        <div class="settings-container">
+
+          <!-- ===== 返回条（本页可经仪表盘横幅直达，独立打开时提供回壳入口） ===== -->
+          <div class="back-bar">
+            <a href="/index.html" target="_top"><i class="fa-solid fa-arrow-left"></i> 返回系统</a>
+            <span class="back-crumb">系统配置 / 授权管理</span>
+          </div>
+
+          <!-- ===== 授权状态卡 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon icon-blue"><i class="fa-solid fa-stamp"></i></span>
+                <span class="card-title">授权状态</span>
+              </div>
+              <span class="card-extra">版本形态、三态与剩余天数</span>
+            </div>
+            <div class="card-body" v-if="status">
+              <div v-if="banner" class="info-banner" :class="banner.cls">
+                <i class="fa-solid" :class="banner.icon"></i>
+                <span>{{ banner.text }}</span>
+              </div>
+              <div class="ver-grid">
+                <div class="ver-item"><span class="k">版本形态</span><span class="v"><span class="ver-badge" :class="status.edition">{{ status.edition === 'pro' ? 'Pro 版' : '免费版' }}</span></span></div>
+                <div class="ver-item"><span class="k">运行时状态</span><span class="v"><span class="ver-badge" :class="stateClass">{{ status.state_label }}</span></span></div>
+                <div class="ver-item"><span class="k">授权剩余天数</span><span class="v">{{ daysLeftText }}</span></div>
+                <div class="ver-item"><span class="k">授权到期时间</span><span class="v">{{ status.expire_at || '—' }}</span></div>
+                <div class="ver-item"><span class="k">云平台对接</span><span class="v">{{ status.platform_enable ? '已配置（在线激活 / 自动续期）' : '未配置（授权码离线验签）' }}</span></div>
+                <div class="ver-item"><span class="k">状态说明</span><span class="v">{{ stateTip }}</span></div>
+                <div class="ver-item full">
+                  <span class="k">安装指纹（提交给服务商用于签发授权码）</span>
+                  <div class="fp-row">
+                    <span class="v mono">{{ status.install_id || '—' }}</span>
+                    <button type="button" class="fp-copy" v-if="status.install_id" @click="copyInstallId"><i class="fa-solid fa-copy"></i> 复制</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 激活 / 续期卡 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon icon-primary"><i class="fa-solid fa-key"></i></span>
+                <span class="card-title">激活 / 续期</span>
+              </div>
+              <span class="card-extra">粘贴服务商提供的授权码字符串即可</span>
+            </div>
+            <div class="card-body">
+              <el-form ref="licForm" class="lic-form" :model="form" :rules="rules" label-position="top" @submit.prevent="activate">
+                <el-form-item label="授权码" prop="code">
+                  <el-input v-model="form.code" type="textarea" :rows="4" placeholder="粘贴服务商提供的授权码字符串" spellcheck="false"></el-input>
+                  <div class="form-hint">已配置云平台对接：提交后自动在线激活；未配置：授权码本地验签直接安装。续期提交新授权码即可，防护无缝衔接。</div>
+                </el-form-item>
+                <el-form-item>
+                  <div class="steps">
+                    <div class="step"><b><span class="no">1</span>获取安装指纹</b>复制上方安装指纹提交给服务商，用于绑定本机签发授权码</div>
+                    <div class="step"><b><span class="no">2</span>获取授权码</b>服务商按指纹与授权时长签发一串授权码字符串</div>
+                    <div class="step"><b><span class="no">3</span>粘贴激活</b>粘贴到上方输入框点击激活，验签通过即生效</div>
+                  </div>
+                </el-form-item>
+                <el-form-item>
+                  <div class="card-actions lic-actions">
+                    <el-button type="primary" :disabled="activating" @click="activate">
+                      <i class="fa-solid fa-check"></i> {{ activating ? '激活中…' : '激活' }}
+                    </el-button>
+                    <el-button @click="loadStatus(false)"><i class="fa-solid fa-rotate"></i> 刷新状态</el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      status: null,
+      activating: false,
+      form: { code: '' },
+      rules: {
+        code: [{ required: true, message: '请输入授权码后再点击激活', trigger: 'blur' }]
+      }
+    };
+  },
+  computed: {
+    stateClass() {
+      if (!this.status) return '';
+      return { 1: 'state-valid', 2: 'state-grace', 3: 'state-expired' }[this.status.state] || '';
+    },
+    daysLeftText() {
+      const d = this.status ? this.status.days_left : null;
+      if (d === null || d === undefined || d < 0) return '—';
+      return d + ' 天';
+    },
+    stateTip() {
+      const s = this.status;
+      if (!s) return '—';
+      return { 1: '授权有效，全部防护功能可用', 2: '授权到期后的 48 小时宽限期，请尽快续费', 3: '防护已停用，仅保留攻击拦截，续费后恢复' }[s.state] || '—';
+    },
+    /* 强提醒横幅：宽限期 / 过期停防护（三态②③） */
+    banner() {
+      const s = this.status;
+      if (!s || s.state === 1) return null;
+      if (s.state === 3) {
+        return { cls: 'danger', icon: 'fa-circle-exclamation', text: '授权已过期超过 48 小时，防护功能已停用（仅保留攻击拦截与业务转发）。请立即续费恢复防护：粘贴新授权码激活即可。' };
+      }
+      return { cls: 'grace', icon: 'fa-triangle-exclamation', text: '授权已到期，当前处于 48 小时宽限期（全功能保留）。请尽快续费，逾期将自动停用防护功能。' };
+    }
+  },
+  mounted() {
+    ThemeManager.init();
+    // 页面加载静默拉取（不弹"已刷新"提示，提示只留给手动点"刷新状态"按钮）
+    this.loadStatus(true);
+  },
+  methods: {
+    /* silent=true 时不弹提示（激活成功后的联动刷新避免双重消息） */
+    loadStatus(silent) {
+      App.api.license.status().then((s) => {
+        this.status = s;
+        if (!silent) ElementPlus.ElMessage.success('授权状态已刷新');
+      }).catch(() => {
+        if (!silent) ElementPlus.ElMessage.error('授权状态刷新失败，请重试');
+      });
+    },
+    copyInstallId() {
+      if (!this.status || !this.status.install_id) return;
+      navigator.clipboard.writeText(this.status.install_id).then(() => {
+        ElementPlus.ElMessage.success('安装指纹已复制');
+      }).catch(() => {
+        ElementPlus.ElMessage.error('复制失败，请手动选择复制');
+      });
+    },
+    activate() {
+      // Element Plus 原生表单验证：空授权码自动红框 + "请输入授权码后再点击激活"文案
+      this.$refs.licForm.validate((valid) => {
+        if (!valid) return;
+        if (this.activating) return;
+        this.activating = true;
+        App.api.license.activate(this.form.code).then(() => {
+          ElementPlus.ElMessage.success('激活成功，授权已生效');
+          this.$refs.licForm.resetFields();
+          this.loadStatus(true);
+        }).catch(() => {}).finally(() => { this.activating = false; });
+      });
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>挑战详情</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* 本页由 DialogBridge 以 iframe 弹窗形式加载（标题栏由主框架提供），也可直接访问查看 */
+    /* iframe 页面：填满弹窗高度；底色与 whitelist/add.html 一致（卡片色，浅色主题即白色）；内容区滚动、底部按钮常驻 */
+    html, body { height: 100%; overflow: hidden; background: var(--bg-card); }
+    #app { height: 100%; display: flex; flex-direction: column; }
+    .mono { font-family: "SF Mono", Consolas, Menlo, monospace; color: var(--text-primary); }
+    .ch-detail { flex: 1; overflow-y: auto; padding: 16px 20px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+
+    /* 验证状态 */
+    .status-pass { color: var(--success); }
+    .status-fail { color: var(--danger); }
+    .status-pending { color: var(--warning); }
+
+    /* 详情字段 */
+    .detail-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 16px; }
+    .detail-list > div { display: flex; flex-direction: column; gap: 3px; }
+    .detail-list > div.full { grid-column: 1 / -1; }
+    .detail-list dt { font-size: 11px; color: var(--text-muted); }
+    .detail-list dd { font-size: 13px; color: var(--text-primary); word-break: break-all; }
+    .detail-section { font-size: 12px; color: var(--text-secondary); margin: 4px 0 8px; font-weight: 600; }
+    .json-block { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; line-height: 1.5; margin-bottom: 16px; }
+
+    /* 底部操作条（吸底） */
+    .ch-footer { flex-shrink: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
+    .ch-tip { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="ch-detail" v-if="row">
+    <dl class="detail-list">
+      <div><dt>客户端IP</dt><dd class="mono">{{ row.client_ip || '-' }}</dd></div>
+      <div><dt>请求ID</dt><dd class="mono" style="word-break:break-all;">{{ row.req_id || '-' }}</dd></div>
+      <div><dt>请求URL</dt><dd class="mono" style="word-break:break-all;">{{ row.url || '-' }}</dd></div>
+      <div><dt>站点</dt><dd>{{ siteName(row.site_id) }}</dd></div>
+      <div><dt>状态</dt><dd><span :class="statusClass(row.status)"><i class="fa-solid" :class="statusIcon(row.status)"></i> {{ statusLabel(row.status) }}</span></dd></div>
+      <div><dt>验证类型</dt><dd>{{ typeLabel(row.challenge_type) }}</dd></div>
+      <div><dt>接口类型</dt><dd><span class="tag" :class="row.is_api === 1 ? 'tag-info' : 'tag-neutral'">{{ row.is_api === 1 ? 'API接口' : 'Web页面' }}</span></dd></div>
+      <div><dt>开始时间</dt><dd>{{ row.create_time || '-' }}</dd></div>
+      <div><dt>持续时间</dt><dd>{{ duration(row) }}</dd></div>
+      <div class="full"><dt>User-Agent</dt><dd style="word-break:break-all;">{{ row.user_agent || '-' }}</dd></div>
+    </dl>
+    <div v-if="row.headers" class="detail-section">请求头</div>
+    <pre v-if="row.headers" class="json-block">{{ row.headers }}</pre>
+    <div class="detail-section">详细记录</div>
+    <pre class="json-block">{{ pretty(row.detail) }}</pre>
+    <template v-if="row.diag">
+      <div class="detail-section">诊断明细</div>
+      <pre class="json-block" style="max-height:320px;">{{ row.diag }}</pre>
+    </template>
+  </div>
+  <div class="ch-tip" v-else>{{ tip }}</div>
+
+  <div class="ch-footer">
+    <el-button @click="close">关闭</el-button>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+/* 弹窗 id 必须与父页面 DialogBridge.open({ id }) 一致 */
+const DIALOG_ID = 'ch_detail';
+
+const app = createApp({
+  data() {
+    return { row: null, tip: '加载中…', sites: [] };
+  },
+  mounted() {
+    ThemeManager.init();
+    const q = new URLSearchParams(window.location.search);
+    const reqId = q.get('req_id');
+    if (!reqId) { this.tip = '缺少请求 ID'; return; }
+    // 站点列表用于把 site_id 显示为站点名（与列表页一致）
+    App.api.site.list(1, 100).then(({ list }) => { this.sites = list || []; }).catch(() => {});
+    // 记录列表接口支持按 req_id 检索（前缀匹配），取最新一条；时间窗沿用打开它的列表页
+    const recParams = { req_id: reqId, page_size: 1 };
+    const st = q.get('start_time'), et = q.get('end_time');
+    if (st) recParams.start_time = st;
+    if (et) recParams.end_time = et;
+    App.api.challenge.records(recParams).then(({ list }) => {
+      const row = (list || [])[0];
+      if (row) { this.row = row; } else { this.tip = '记录不存在或已过期'; }
+    }).catch(() => { this.tip = '加载失败'; });
+  },
+  methods: {
+    /* 在弹窗内 → 通知主框架关闭；被直接打开（无父窗口）→ 返回上一页 */
+    close() {
+      if (window.parent && window.parent !== window) {
+        DialogBridge.close({ id: DIALOG_ID, msg: '', refresh: false });
+        return;
+      }
+      if (history.length > 1) history.back();
+    },
+    siteName(id) { return App.ui.siteName(this.sites, id); },
+    statusLabel(s) { return App.ui.challengeStatusLabel(s); },
+    statusClass(s) { return App.ui.challengeStatusClass(s); },
+    statusIcon(s) { return App.ui.challengeStatusIcon(s); },
+    typeLabel(t) { return App.ui.challengeTypeLabel(t); },
+    duration(row) { return App.ui.challengeDuration(row); },
+    pretty(s) {
+      if (!s) return '— 无 —';
+      try { return JSON.stringify(JSON.parse(s), null, 2); } catch (e) { return s; }
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

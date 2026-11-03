@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>防线运营</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    .topn-list { display: flex; flex-direction: column; gap: 8px; }
+    .topn-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+    .topn-main { flex: 1; min-width: 0; }
+    .topn-line1 { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 3px; }
+    .topn-key { color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topn-val { color: var(--text-secondary); flex: none; font-family: "SF Mono", Consolas, monospace; }
+    .topn-val b { color: var(--text-primary); }
+    .topn-bar { height: 4px; border-radius: 2px; background: var(--bg-input); overflow: hidden; }
+    .topn-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+    .topn-bar i.warm { background: var(--warning); }
+    .chart-box { width: 100%; height: 280px; }
+    .quick-ranges { display: flex; gap: 6px; }
+    .rate-num { font-size: 13px; color: var(--warning); font-weight: 600; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="layout">
+    <div class="main">
+      <div class="content">
+        <div class="section-title">防线运营<span class="sub">防线自检：拦截原因分布 / 误伤解封率 / 绕过趋势（Pro 独占）</span></div>
+
+        <!-- 筛选栏 -->
+        <div class="filter-bar">
+          <div class="filter-left">
+            <div class="filter-group">
+              <label class="filter-label"><el-icon :size="14"><component :is="'Clock'"/></el-icon>趋势区间</label>
+              <div class="quick-ranges">
+                <el-button :class="{ active: days === 7 }" @click="setDays(7)">近7天</el-button>
+                <el-button :class="{ active: days === 14 }" @click="setDays(14)">近14天</el-button>
+                <el-button :class="{ active: days === 30 }" @click="setDays(30)">近30天</el-button>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <el-button type="primary" @click="load"><el-icon :size="13"><component :is="'Refresh'"/></el-icon> 刷新</el-button>
+          </div>
+        </div>
+
+        <!-- 指标卡 -->
+        <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">累计入库</span><div class="stat-icon icon-blue"><el-icon :size="14"><component :is="'Aim'"/></el-icon></div></div>
+            <div class="stat-value">{{ fmt(mis.total) }}</div>
+            <div class="stat-change">爬虫 IP 库累计标记</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">拦截中</span><div class="stat-icon icon-green"><el-icon :size="14"><component :is="'Shield'"/></el-icon></div></div>
+            <div class="stat-value">{{ fmt(mis.active) }}</div>
+            <div class="stat-change">当前生效拦截（status=1）</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">已解封</span><div class="stat-icon icon-cyan"><el-icon :size="14"><component :is="'CircleCheck'"/></el-icon></div></div>
+            <div class="stat-value">{{ fmt(mis.disabled) }}</div>
+            <div class="stat-change">停用/删除的历史标记</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">误伤（解封）率</span><div class="stat-icon icon-orange"><el-icon :size="14"><component :is="'Warning'"/></el-icon></div></div>
+            <div class="stat-value"><span class="rate-num">{{ mis.rate }}%</span></div>
+            <div class="stat-change">已解封 / 累计入库，越低越准</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;" class="trend-grid">
+          <!-- 解封 vs 入库趋势 -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">入库与解封趋势</span>
+              <span class="card-extra">按自然日聚合</span>
+            </div>
+            <div class="card-body"><div id="misChart" class="chart-box"></div></div>
+          </div>
+          <!-- 绕过趋势 -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">绕过趋势（处置动作分布）</span>
+              <span class="card-extra">观察=疑似攻击放行</span>
+            </div>
+            <div class="card-body"><div id="bypassChart" class="chart-box"></div></div>
+          </div>
+        </div>
+
+        <!-- reason 分布 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">拦截原因分布</span>
+            <span class="card-extra">整库口径：累计入库 / 拦截中（差值即已解封）</span>
+          </div>
+          <div class="card-body">
+            <div class="topn-list" v-if="reasonDist.length">
+              <div class="topn-row" v-for="r in reasonDist" :key="r.reason">
+                <span class="topn-key" style="width:150px;flex:none;">{{ r.label }}</span>
+                <div class="topn-main">
+                  <div class="topn-line1">
+                    <span class="topn-val">拦截中 <b>{{ fmt(r.active) }}</b> · 已解封 {{ fmt(r.total - r.active) }}</span>
+                    <span class="topn-val">累计 {{ fmt(r.total) }}</span>
+                  </div>
+                  <div class="topn-bar"><i :class="{ warm: (r.total - r.active) > r.total * 0.3 }" :style="{ width: barPct(r.total) }"></i></div>
+                </div>
+              </div>
+              <div class="form-hint" style="margin-top:6px;">橙色进度条：该原因解封占比超 30%，疑似误伤信号，建议核查对应防线策略</div>
+            </div>
+            <div v-else class="empty-state"><el-icon :size="28"><component :is="'FolderOpened'"/></el-icon><div>爬虫库暂无数据</div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/lib/echarts.min.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      days: 7,
+      mis: { total: 0, active: 0, disabled: 0, rate: 0, release_trend: [], intake_trend: [] },
+      reasonDist: [],
+      bypassTrend: [],
+      charts: {}
+    };
+  },
+  mounted() {
+    ThemeManager.init();
+    this.load();
+    window.addEventListener('resize', () => { Object.values(this.charts).forEach(c => c && c.resize && c.resize()); });
+    window.addEventListener('message', (e) => { if (e.data && e.data.action === 'theme_change') this.renderCharts(); });
+  },
+  methods: {
+    fmt(n) { return (n === null || n === undefined) ? '0' : Number(n).toLocaleString(); },
+    barPct(v) {
+      const max = Math.max.apply(null, this.reasonDist.map(x => x.total).concat([1]));
+      return Math.max(2, Math.round(v / max * 100)) + '%';
+    },
+    setDays(d) { this.days = d; this.load(); },
+    load() {
+      App.api.metrics.defense({ days: this.days }).then((resp) => {
+        if (!resp) return;
+        this.mis = resp.misreport || this.mis;
+        this.reasonDist = (resp.reason_dist || []).slice().sort((a, b) => b.total - a.total);
+        this.bypassTrend = resp.bypass_trend || [];
+        this.renderCharts();
+      }).catch(() => {});
+    },
+    getChart(id, el) {
+      if (!this.charts[id]) this.charts[id] = echarts.init(el);
+      return this.charts[id];
+    },
+    chartColors() {
+      const g = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      return {
+        tooltipBg: g('--chart-tooltip-bg'), tooltipBorder: g('--chart-tooltip-border'), tooltipText: g('--chart-tooltip-text'),
+        axisLine: g('--chart-axis-line'), splitLine: g('--chart-split-line'), axisLabel: g('--chart-axis-label'),
+        legendText: g('--chart-legend-text')
+      };
+    },
+    renderCharts() {
+      this.$nextTick(() => { this.renderMisChart(); this.renderBypassChart(); });
+    },
+    baseOption(c, legend) {
+      return {
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis', backgroundColor: c.tooltipBg, borderColor: c.tooltipBorder, textStyle: { color: c.tooltipText } },
+        legend: { data: legend, textStyle: { color: c.legendText, fontSize: 11 } },
+        grid: { left: 48, right: 16, top: 32, bottom: 24 },
+        xAxis: { type: 'category', data: [], axisLine: { lineStyle: { color: c.axisLine } }, axisLabel: { color: c.axisLabel, fontSize: 10 } },
+        yAxis: { type: 'value', splitLine: { lineStyle: { color: c.splitLine } }, axisLabel: { color: c.axisLabel, fontSize: 10 } }
+      };
+    },
+    /* 入库（蓝）与解封（橙）双线 */
+    renderMisChart() {
+      const el = document.getElementById('misChart');
+      if (!el || !window.echarts) return;
+      const chart = this.getChart('misChart', el);
+      chart.clear();
+      const c = this.chartColors();
+      const days = [...new Set([].concat(this.mis.intake_trend || [], this.mis.release_trend || []).map(x => x.day))].sort();
+      if (!days.length) { chart.setOption({ graphic: { type: 'text', left: 'center', top: 'middle', style: { text: '暂无数据', fill: '#5c6b7d', fontSize: 13 } } }); return; }
+      const mapOf = arr => { const m = {}; (arr || []).forEach(x => { m[x.day] = x.count; }); return m; };
+      const intake = mapOf(this.mis.intake_trend), release = mapOf(this.mis.release_trend);
+      const opt = this.baseOption(c, ['入库', '解封操作']);
+      opt.xAxis.data = days.map(d => d.slice(5));
+      opt.series = [
+        { name: '入库', type: 'line', smooth: true, symbol: 'none', data: days.map(d => intake[d] || 0), lineStyle: { width: 2, color: '#2f7bf6' }, itemStyle: { color: '#2f7bf6' } },
+        { name: '解封操作', type: 'line', smooth: true, symbol: 'none', data: days.map(d => release[d] || 0), lineStyle: { width: 2, color: '#f59e0b' }, itemStyle: { color: '#f59e0b' } }
+      ];
+      chart.setOption(opt);
+    },
+    /* 绕过趋势：观察（红=疑似攻击放行）vs 拦截处置合计（绿） */
+    renderBypassChart() {
+      const el = document.getElementById('bypassChart');
+      if (!el || !window.echarts) return;
+      const chart = this.getChart('bypassChart', el);
+      chart.clear();
+      const c = this.chartColors();
+      // action 归并：observe 单列（绕过观察口径）；block/challenge/captcha/redirect 等为"拦截处置"
+      const days = [...new Set(this.bypassTrend.map(x => x.day))].sort();
+      if (!days.length) { chart.setOption({ graphic: { type: 'text', left: 'center', top: 'middle', style: { text: '暂无数据', fill: '#5c6b7d', fontSize: 13 } } }); return; }
+      const observe = {}, blocked = {};
+      this.bypassTrend.forEach(x => {
+        if (x.action === 'observe') { observe[x.day] = (observe[x.day] || 0) + x.count; }
+        else { blocked[x.day] = (blocked[x.day] || 0) + x.count; }
+      });
+      const opt = this.baseOption(c, ['观察放行（疑似绕过）', '拦截处置']);
+      opt.xAxis.data = days.map(d => d.slice(5));
+      opt.series = [
+        { name: '观察放行（疑似绕过）', type: 'bar', stack: 'a', data: days.map(d => observe[d] || 0), itemStyle: { color: '#ef4444' }, barMaxWidth: 18 },
+        { name: '拦截处置', type: 'bar', stack: 'a', data: days.map(d => blocked[d] || 0), itemStyle: { color: '#22c55e' }, barMaxWidth: 18 }
+      ];
+      chart.setOption(opt);
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

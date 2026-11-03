@@ -1,0 +1,6 @@
+{
+  "admin_session_secret": "",
+  "admin_cookie_name": "waf_session",
+  "license_secret": "",
+  "platform_base_url": ""
+}

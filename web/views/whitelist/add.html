@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>白名单规则编辑</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ============================================================
+       白名单规则表单页样式（1:1 对齐 UI/cc 弹窗表单）
+       - 与 cc/add.html 同构的 el-form + el-form-item 结构，
+         避免 el-row(position:relative) 破坏 el-select 下拉浮动层定位
+       ============================================================ */
+    html, body { height: 100%; background: var(--bg-card); }
+    #app { height: 100%; }
+    .edit-container { height: 100%; box-sizing: border-box; padding: 16px 20px 0; display: flex; flex-direction: column; }
+    .edit-body { flex: 1; overflow-y: auto; }
+    .edit-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 0 16px; border-top: 1px solid var(--border); margin-top: 8px; }
+
+    /* 表单网格（两列，对齐 cc） */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .toggle-row { display: flex; align-items: center; gap: 12px; height: 38px; }
+    .toggle-row .switch { flex-shrink: 0; }
+    .toggle-row .toggle-tip { font-size: 12px; color: var(--text-secondary); }
+    .err { color: var(--danger); font-size: 11px; margin-top: 5px; display: none; }
+    .err.show { display: block; }
+    .form-input.error, .form-select.error { border-color: var(--danger); }
+    .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
+
+    /* 放行选项复选框（对齐 UI 原型白名单弹窗：横排 gap16 + 原生方框；深浅色由变量适配） */
+    .skip-checks { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .skip-checks .chk { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary); cursor: pointer; user-select: none; }
+    .skip-checks .chk input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 14px; height: 14px; margin: 0; flex-shrink: 0;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--bg-input);
+      cursor: pointer; position: relative;
+      transition: border-color .15s, background-color .15s;
+    }
+    .skip-checks .chk input[type="checkbox"]:hover { border-color: var(--accent); }
+    .skip-checks .chk input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+    .skip-checks .chk input[type="checkbox"]:checked::after {
+      content: ""; position: absolute; left: 4px; top: 1px;
+      width: 4px; height: 8px;
+      border: solid #fff; border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+
+    /* 深浅色兜底（保证输入框/下拉框不显白底，与 element-reset 保持一致） */
+    .el-input__wrapper { background-color: var(--bg-card) !important; box-shadow: 0 0 0 1px var(--border) inset !important; }
+    .el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+    .el-input__inner { color: var(--text-primary) !important; }
+    .el-select__wrapper { background-color: var(--bg-card) !important; box-shadow: 0 0 0 1px var(--border) inset !important; }
+    .el-select__wrapper.is-focused { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+    .el-select__selected-item { color: var(--text-primary) !important; }
+    .el-select__placeholder { color: var(--text-muted) !important; }
+    .el-select__popper.el-popper, .el-select-dropdown { background: var(--bg-card) !important; }
+    .el-select-dropdown__item { color: var(--text-secondary); }
+    .el-select-dropdown__item.is-hovering { background-color: var(--bg-card-hover); }
+    .el-select-dropdown__item.is-selected { color: var(--accent); }
+
+    /* 弹窗约 600px 保持两列；仅 <500px 极窄时降单列避免挤压（同 cc/custom_rule） */
+    @media (max-width: 500px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+
+    /* 条件组编辑器（与 custom_rule/add.html 同构） */
+    .cond-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    .cond-row .cond-target { width: 132px; flex-shrink: 0; }
+    .cond-row .cond-op { width: 128px; flex-shrink: 0; }
+    .cond-row .cond-value { flex: 1; min-width: 0; }
+    .cond-value-fields { display: flex; gap: 6px; flex: 1; min-width: 0; }
+    .cond-value-fields .cond-field { width: 46%; flex-shrink: 0; }
+    .cond-value-fields .cond-value { width: auto; min-width: 0; }
+    .cond-row .cond-del { width: 36px; height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .cond-row .cond-del:hover { color: var(--danger); border-color: var(--danger); }
+    .add-cond { margin-top: 4px; }
+    /* 标签输入框（多值算子：回车/空格/逗号成签，× 删除；入库英文逗号拼接，回显逗号拆分） */
+    .taginput { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex: 1; min-width: 0; min-height: 32px; padding: 3px 8px; background: var(--bg-card); box-shadow: 0 0 0 1px var(--border) inset; border-radius: 8px; cursor: text; transition: box-shadow .15s; }
+    .taginput:focus-within { box-shadow: 0 0 0 1px var(--accent) inset; }
+    .taginput .tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; background: var(--accent-soft); color: var(--accent); border-radius: 4px; font-size: 12px; line-height: 18px; }
+    .taginput .tag .tag-txt { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .taginput .tag .tag-x { font-style: normal; cursor: pointer; color: var(--accent); font-size: 14px; line-height: 1; }
+    .taginput .tag .tag-x:hover { color: var(--danger); }
+    .taginput .tag-input { flex: 1; min-width: 90px; border: none; outline: none; background: transparent; height: 24px; font-size: 12px; color: var(--text-primary); }
+    .logic-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .logic-row .logic-select { width: 130px; flex-shrink: 0; }
+    .logic-row .logic-tip { font-size: 12px; color: var(--text-secondary); flex-basis: 100%; }
+    .cond-group { border: 1px solid var(--border); border-radius: 10px; padding: 12px 12px 4px; margin-bottom: 10px; background: var(--bg-input); }
+    .cond-group-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .cond-group-tag { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 3px 10px; flex-shrink: 0; }
+    .cond-group-head .group-logic-label { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+    .cond-group-head .group-logic-select { width: 110px; flex-shrink: 0; }
+    .cond-group-head .group-del { margin-left: auto; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .cond-group-head .group-del:hover { color: var(--danger); border-color: var(--danger); }
+    .add-group { margin-top: 2px; }
+    .add-group-hint { font-size: 12px; color: var(--text-secondary); margin-left: 10px; }
+    @media (max-width: 500px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .cond-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
+      .cond-row .cond-target { grid-column: 1; grid-row: 1; width: 100% !important; }
+      .cond-row .cond-op { grid-column: 2; grid-row: 1; width: 100% !important; }
+      .cond-row .cond-value { grid-column: 1 / 3; grid-row: 2; width: 100% !important; }
+      .cond-row .taginput { grid-column: 1 / 3; grid-row: 2; }
+      .cond-row .cond-del { grid-column: 3; grid-row: 2; }
+    }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="edit-container">
+    <div class="edit-body">
+      <el-form :model="form" label-position="top" @submit.prevent="submitRule">
+        <div class="form-grid">
+          <!-- 规则名称 -->
+          <el-form-item label="规则名称 *">
+            <el-input v-model="form.name" :class="{ error: errors.name }" @input="errors.name = false" placeholder="如：放行搜索引擎爬虫"></el-input>
+            <div class="err" :class="{ show: errors.name }">请输入规则名称</div>
+          </el-form-item>
+          <!-- 适用站点 -->
+          <el-form-item label="适用站点 *">
+            <el-select v-model="form.site_id" style="width:100%;" placeholder="请选择站点">
+              <el-option label="全部站点（全局）" :value="0"></el-option>
+              <el-option v-for="s in sites" :key="s.id" :label="s.name" :value="s.id"></el-option>
+            </el-select>
+          </el-form-item>
+          <!-- 匹配条件（两层条件组编辑器：免费版单组一层平铺，组内且/或在组头选择；Pro 版多组，组内/组间逻辑独立） -->
+          <el-form-item class="full" label="匹配条件 *">
+            <div style="width:100%;">
+              <div class="cond-group" v-for="(g, gi) in form.groups" :key="gi">
+                <div class="cond-group-head" v-if="showGroupHead(g)">
+                  <span class="cond-group-tag">条件组 {{ gi + 1 }}</span>
+                  <span class="group-logic-label">组内</span>
+                  <el-select class="group-logic-select" v-model="g.logic" size="small">
+                    <el-option label="且（AND）" value="and"></el-option>
+                    <el-option label="或（OR）" value="or"></el-option>
+                  </el-select>
+                  <button type="button" class="group-del" title="删除条件组" v-if="form.groups.length > 1" @click="removeGroup(gi)"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                <div class="cond-row" v-for="(c, idx) in g.conditions" :key="gi + '-' + idx">
+                  <el-select class="cond-target" v-model="c.target" style="width:132px;" placeholder="目标" :disabled="isIPGroupOp(c.operator)">
+                    <el-option v-for="o in targetOpts" :key="o.value" :label="o.label" :value="o.value"></el-option>
+                  </el-select>
+                  <el-select class="cond-op" v-model="c.operator" style="width:128px;" placeholder="算子" @change="onOperatorChange(c)">
+                    <el-option v-for="o in opOpts" :key="o.value" :label="o.label" :value="o.value"></el-option>
+                  </el-select>
+                  <el-select v-if="isIPGroupOp(c.operator)" class="cond-value" v-model="c.groups" multiple collapse-tags collapse-tags-tooltip style="width:0;flex:1;" placeholder="请选择IP组（可多选）" filterable>
+                    <el-option v-for="g2 in ipGroups" :key="g2.id" :label="g2.name" :value="String(g2.id)"></el-option>
+                  </el-select>
+                  <div v-else-if="needsField(c.target)" class="cond-value cond-value-fields">
+                    <el-input class="cond-field" v-model="c.field" :placeholder="c.target === 'cookie' ? 'Cookie名' : 'Header名'"></el-input>
+                    <div v-if="isMultiOp(c.operator)" class="taginput" @click="focusTag($event)">
+                      <span class="tag" v-for="(t, ti) in c.valueList" :key="ti"><span class="tag-txt">{{ t }}</span><i class="tag-x" title="删除" @click.stop="removeTag(c, ti)">×</i></span>
+                      <input class="tag-input" v-model="c.tagDraft" :placeholder="c.valueList.length ? '' : multiPlaceholder(c)" @keydown="onTagKeydown(c, $event)" @paste="onTagPaste(c, $event)" @blur="commitTag(c)">
+                    </div>
+                    <el-input v-else-if="isNoValueOp(c.operator)" class="cond-value" model-value="" disabled placeholder="该算子不使用匹配值，无需填写"></el-input>
+                    <el-input v-else class="cond-value" v-model="c.value" :placeholder="valuePlaceholder(c)"></el-input>
+                  </div>
+                  <div v-else-if="isMultiOp(c.operator)" class="taginput" @click="focusTag($event)">
+                    <span class="tag" v-for="(t, ti) in c.valueList" :key="ti"><span class="tag-txt">{{ t }}</span><i class="tag-x" title="删除" @click.stop="removeTag(c, ti)">×</i></span>
+                    <input class="tag-input" v-model="c.tagDraft" :placeholder="c.valueList.length ? '' : multiPlaceholder(c)" @keydown="onTagKeydown(c, $event)" @paste="onTagPaste(c, $event)" @blur="commitTag(c)">
+                  </div>
+                  <el-input v-else-if="isNoValueOp(c.operator)" class="cond-value" model-value="" disabled placeholder="该算子不使用匹配值，无需填写"></el-input>
+                  <el-input v-else class="cond-value" v-model="c.value" :placeholder="valuePlaceholder(c)"></el-input>
+                  <button type="button" class="cond-del" title="删除条件" @click="removeCond(gi, idx)"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                <el-button class="add-cond" size="small" @click="addCond(gi)"><i class="fa-solid fa-plus"></i> 添加条件</el-button>
+              </div>
+              <el-button v-if="isPro" class="add-group" size="small" @click="addGroup"><i class="fa-solid fa-plus"></i> 添加条件组</el-button>
+              <span class="add-group-hint" v-if="isPro">Pro 版支持两层条件组：组间按下方逻辑组合，组内每组可独立指定且/或（最多 10 组）</span>
+              <div class="form-hint" style="margin-top:6px;">等于/包含支持多值：输入后回车/空格逐个添加（任一命中即成立）；不等于/不包含为排除列表（任一命中即不成立）；正则按整体执行不拆分；存在/不存在/为空无需匹配值。</div>
+              <div class="err" :class="{ show: errors.cond }">请至少添加一个有效条件</div>
+            </div>
+          </el-form-item>
+
+          <!-- 条件组间逻辑关系：仅多组（≥2）时显示；单组时组内逻辑在组头选择，组间逻辑无意义 -->
+          <el-form-item v-if="form.groups.length > 1" label="条件组间逻辑关系">
+            <div class="logic-row">
+              <el-select class="logic-select" v-model="form.logic" style="width:130px;">
+                <el-option label="AND（且）" value="and"></el-option>
+                <el-option label="OR（或）" value="or"></el-option>
+              </el-select>
+              <span class="logic-tip">AND：所有条件组同时满足；OR：满足任一组即可</span>
+            </div>
+          </el-form-item>
+          <!-- 动作 -->
+          <el-form-item label="动作 *">
+            <el-select v-model="form.action" style="width:100%;">
+              <el-option label="放行" value="pass"></el-option>
+              <el-option label="观察" value="observe"></el-option>
+            </el-select>
+          </el-form-item>
+          <!-- 状态 -->
+          <el-form-item label="状态">
+            <div class="toggle-row">
+              <el-switch v-model="form.status"></el-switch>
+              <span class="toggle-tip">{{ form.status ? '启用' : '禁用' }}</span>
+            </div>
+          </el-form-item>
+          <!-- 放行选项 -->
+          <el-form-item v-if="form.action === 'pass'" class="full" label="放行选项">
+            <div class="skip-checks">
+              <el-checkbox v-model="form.skip_rule">跳过自定义规则</el-checkbox>
+              <el-checkbox v-model="form.skip_challenge">跳过人机验证</el-checkbox>
+              <el-checkbox v-model="form.skip_cc">跳过 CC 限速</el-checkbox>
+            </div>
+            <div class="form-hint">放行时选择跳过哪些后续步骤，默认仅跳过自定义规则</div>
+          </el-form-item>
+        </div>
+      </el-form>
+    </div>
+    <div class="edit-footer">
+      <el-button @click="onCancel"><i class="fa-solid fa-xmark"></i> 取消</el-button>
+      <el-button type="primary" :disabled="saving" @click="submitRule"><i class="fa-solid fa-check"></i> 确定</el-button>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      editId: null,
+      saving: false,
+      isPro: false, // 版本形态（/api/system/info）：Pro 才显示"添加条件组"与组头组内逻辑
+      sites: [],
+      // 目标/算子对齐引擎全集（pkg/matcher）：IP 组作为算子"属于/不属于IP组"附在末尾；
+      // loadInfo 完成后按 edition 重取（Pro 追加带角标的独占项）
+      targetOpts: App.ui.targetOptions(),
+      opOpts: [...App.ui.operatorOptions(), { value: 'in_ip_group', label: '属于IP组' }, { value: 'not_in_ip_group', label: '不属于IP组' }],
+      form: { name: '', site_id: 0, logic: 'and', groups: [this.emptyGroup()], action: 'pass', skip_rule: true, skip_challenge: false, skip_cc: false, status: true },
+      errors: { name: false, cond: false },
+      ipGroups: []
+    };
+  },
+  mounted() {
+    ThemeManager.init();
+    App.loadInfo().then((info) => {
+      this.isPro = !!(info && info.edition === 'pro');
+      // Pro 版字典追加带（Pro）角标的独占字段/算子（免费版 App.ui 不返回 Pro 项）
+      this.targetOpts = App.ui.targetOptions();
+      this.opOpts = [...App.ui.operatorOptions(), { value: 'in_ip_group', label: '属于IP组' }, { value: 'not_in_ip_group', label: '不属于IP组' }];
+    }).catch(() => {});
+    // 加载站点列表（供"适用站点"选择）
+    App.api.site.list(1, 100).then(({ list }) => { this.sites = list || []; }).catch(() => {});
+    // 加载IP组（供 IP 组算子多选）
+    App.api.ipGroup.list(1, 100).then(({ list }) => {
+      this.ipGroups = (list || []).filter(g => g.status === 1);
+    }).catch(() => {});
+    // 解析 URL 参数
+    const params = new URLSearchParams(window.location.search);
+    this.editId = params.get('id') ? parseInt(params.get('id'), 10) : null;
+    this.form.site_id = params.get('site_id') ? parseInt(params.get('site_id'), 10) : 0;
+    if (this.editId) {
+      App.api.whitelist.info(this.editId).then((r) => {
+        if (r) this.fillForm(r);
+      }).catch(() => {});
+    }
+  },
+  methods: {
+    emptyGroup() {
+      return { logic: 'and', conditions: [{ target: 'ip', operator: 'equal', value: '', valueList: [], tagDraft: '', field: '', groups: [] }] };
+    },
+    /* 组头（组内逻辑）：多组时恒显示；单组条件数>1 时也显示（组内且/或，免费一层多条件同样可编辑）；
+       组头删除按钮仅多组时渲染（唯一组不可删） */
+    showGroupHead(g) {
+      return this.form.groups.length > 1 || g.conditions.length > 1;
+    },
+    isIPGroupOp(op) { return op === 'in_ip_group' || op === 'not_in_ip_group'; },
+    /* Header/Cookie 目标需填写字段名 */
+    needsField(target) { return target === 'header' || target === 'cookie'; },
+    /* 多值算子（引擎按英文逗号拆段，任一命中）：值用标签输入，入库英文逗号拼接、回显逗号拆分 */
+    isMultiOp(op) { return op === 'equal' || op === 'not_equal' || op === 'contains' || op === 'not_contains' || op === 'contains_i'; },
+    /* 无值算子（Pro 存在/不存在/为空）：引擎忽略匹配值 */
+    isNoValueOp(op) { return op === 'exists' || op === 'not_exists' || op === 'empty'; },
+    multiPlaceholder(c) {
+      if (c.target === 'ip') return '输入IP或网段后回车/空格添加，可多个';
+      if (c.target === 'path') return '输入路径后回车/空格添加，可多个';
+      return '输入后回车/空格添加，可多个';
+    },
+    /* 单值算子（正则/长度/数值）占位提示 */
+    valuePlaceholder(c) {
+      if (c.operator === 'len_equal' || c.operator === 'len_greater' || c.operator === 'len_less') return '填纯数字（按字符长度比较）';
+      if (c.operator === 'val_greater' || c.operator === 'val_less') return '填纯数字';
+      return '匹配值，填正则或完整匹配串';
+    },
+    focusTag(e) { const input = e.currentTarget.querySelector('.tag-input'); if (input) input.focus(); },
+    /* 草稿成签：按中英文逗号拆段去重（标签内不含逗号，与引擎英文逗号拆段口径一致） */
+    commitTag(c) {
+      const draft = String(c.tagDraft || '').trim();
+      if (draft === '') return;
+      draft.split(/[,，]+/).forEach(s => {
+        s = s.trim();
+        if (s !== '' && c.valueList.indexOf(s) === -1) c.valueList.push(s);
+      });
+      c.tagDraft = '';
+    },
+    removeTag(c, ti) { c.valueList.splice(ti, 1); },
+    onTagKeydown(c, e) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === ',' || e.key === '，') {
+        e.preventDefault();
+        this.commitTag(c);
+      } else if (e.key === 'Backspace' && !String(c.tagDraft || '') && c.valueList.length) {
+        e.preventDefault();
+        c.valueList.pop();
+      }
+    },
+    /* 粘贴成签：按逗号/换行拆段（不按空格拆，保留含空格的包含值） */
+    onTagPaste(c, e) {
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      if (!text) return;
+      e.preventDefault();
+      String(text).split(/[,，\r\n]+/).forEach(s => {
+        s = s.trim();
+        if (s !== '' && c.valueList.indexOf(s) === -1) c.valueList.push(s);
+      });
+    },
+    /* 条件最终值：无值算子存空串；多值算子取标签列表英文逗号拼接；其余取文本框值 */
+    condValue(c) {
+      if (this.isNoValueOp(c.operator)) return '';
+      if (this.isMultiOp(c.operator)) return (c.valueList || []).map(s => String(s).trim()).filter(s => s !== '').join(',');
+      return String(c.value || '').trim();
+    },
+    /* 解析存储值 ip_group:id1,ip_group:id2 → 选中组 id 数组 */
+    parseGroupIds(op, value) {
+      if (!this.isIPGroupOp(op)) return [];
+      return String(value || '').split(',').map(s => s.trim()).filter(s => s.startsWith('ip_group:')).map(s => s.replace('ip_group:', ''));
+    },
+    /* 单条件 → 编辑器条件对象（多值算子：入库值按英文逗号拆分为标签回显） */
+    toCond(target, operator, value, field) {
+      const op = operator || 'equal';
+      return {
+        target: target || 'ip', operator: op, value: value || '', field: field || '',
+        valueList: this.isMultiOp(op) ? String(value || '').split(',').map(s => s.trim()).filter(s => s !== '') : [],
+        tagDraft: '',
+        groups: this.parseGroupIds(op, value)
+      };
+    },
+    fillForm(r) {
+      this.form = {
+        name: r.name || '', site_id: r.site_id || 0, logic: (r.logic || 'and').toLowerCase(),
+        groups: [], action: (r.skip_rule === 1 || r.skip_challenge === 1 || r.skip_cc === 1) ? 'pass' : 'observe',
+        skip_rule: r.skip_rule === 1, skip_challenge: r.skip_challenge === 1, skip_cc: r.skip_cc === 1,
+        status: r.status === 1
+      };
+      // 优先读 conditions 组数组（M5 多条件）；存量旧规则（conditions 空）回退旧列构造单组
+      let groups = null;
+      try {
+        const arr = JSON.parse(r.conditions || '[]');
+        if (Array.isArray(arr) && arr.length && arr[0].conditions) {
+          groups = arr.map(g => ({
+            logic: (g.logic || '').toLowerCase() || (r.logic || 'and').toLowerCase(),
+            conditions: (g.conditions || []).map(c => this.toCond(c.target, c.operator, c.value, c.field))
+          })).filter(g => g.conditions.length);
+        }
+      } catch (e) {}
+      if (!groups || !groups.length) {
+        groups = [{ logic: (r.logic || 'and').toLowerCase(), conditions: [this.toCond(r.target, r.operator, r.value, r.field)] }];
+      }
+      this.form.groups = groups;
+    },
+    addCond(gi) { this.form.groups[gi].conditions.push({ target: 'ip', operator: 'equal', value: '', valueList: [], tagDraft: '', field: '', groups: [] }); this.errors.cond = false; },
+    removeCond(gi, idx) { this.form.groups[gi].conditions.splice(idx, 1); },
+    addGroup() {
+      if (this.form.groups.length >= 10) { ElementPlus.ElMessage({ message: '条件组最多 10 组', type: 'warning', duration: 2000 }); return; }
+      this.form.groups.push(this.emptyGroup());
+      this.errors.cond = false;
+    },
+    removeGroup(gi) {
+      if (this.form.groups.length <= 1) return;
+      this.form.groups.splice(gi, 1);
+    },
+    /* 算子切换：IP 组算子时目标固定为源IP；切换后清空各形态的已填值 */
+    onOperatorChange(c) {
+      if (this.isIPGroupOp(c.operator)) {
+        c.target = 'ip';
+      } else {
+        c.groups = [];
+      }
+      c.value = '';
+      c.valueList = [];
+      c.tagDraft = '';
+    },
+    onCancel() {
+      DialogBridge.close({ id: 'wl_edit', msg: '', refresh: false });
+    },
+    submitRule() {
+      const name = (this.form.name || '').trim();
+      this.errors = { name: false, cond: false };
+      if (!name) { this.errors.name = true; return; }
+      // 过滤空值条件 + 前端预校验（正则合法性由后端与引擎兜底，IP 组算子按已选组数判断）：
+      // 无值算子恒有效；多值算子按标签数；其余按文本值（Header/Cookie 均须同时填字段名）
+      const groups = this.form.groups.map(g => {
+        const conds = g.conditions.filter(c => {
+          if (this.isIPGroupOp(c.operator)) return c.groups && c.groups.length > 0;
+          let ok;
+          if (this.isNoValueOp(c.operator)) ok = true;
+          else if (this.isMultiOp(c.operator)) ok = (c.valueList || []).length > 0;
+          else ok = String(c.value || '').trim() !== '';
+          if (this.needsField(c.target)) return (c.field || '').trim() !== '' && ok;
+          return ok;
+        });
+        return { logic: (g.logic || 'and').toLowerCase(), conditions: conds };
+      }).filter(g => g.conditions.length);
+      if (!groups.length) { this.errors.cond = true; ElementPlus.ElMessage({ message: '请至少添加一个有效条件', type: 'error', duration: 2000 }); return; }
+      this.saving = true;
+      const single = groups.length === 1;
+      // 组内逻辑一律取各组 g.logic（组头选择器直接绑定，单组多条件时组头同样可见）；
+      // 规则级 logic：单组=该组组内逻辑（保持列语义一致）；多组=底部"条件组间逻辑关系"（组间组合）
+      const conditionsJson = JSON.stringify(groups.map(g => ({
+        logic: g.logic || 'and',
+        conditions: g.conditions.map(c => {
+          if (this.isIPGroupOp(c.operator)) {
+            return { target: 'ip', operator: c.operator, value: c.groups.map(gid => 'ip_group:' + gid).join(','), field: c.field || '' };
+          }
+          return { target: c.target, operator: c.operator, value: this.condValue(c), field: c.field || '' };
+        })
+      })));
+      // 双写旧列（列表页展示兼容）：单组写第一条件；多组引擎走 conditions，旧列置空
+      let first = null;
+      try { first = JSON.parse(conditionsJson)[0].conditions[0]; } catch (e) {}
+      const legacy = single && first ? first : { target: '', operator: '', value: '', field: '' };
+      const data = {
+        id: this.editId || '',
+        site_id: this.form.site_id || 0,
+        name: name,
+        target: legacy.target,
+        operator: legacy.operator,
+        value: legacy.value,
+        field: legacy.field,
+        conditions: conditionsJson,
+        logic: single ? (groups[0].logic || 'and') : (this.form.logic || 'and'),
+        skip_rule: this.form.action === 'pass' ? (this.form.skip_rule ? 1 : 0) : 0,
+        skip_challenge: this.form.action === 'pass' ? (this.form.skip_challenge ? 1 : 0) : 0,
+        skip_cc: this.form.action === 'pass' ? (this.form.skip_cc ? 1 : 0) : 0,
+        status: this.form.status ? 1 : 0
+      };
+      App.api.whitelist.save(data).then(() => {
+        DialogBridge.close({ id: 'wl_edit', msg: this.editId ? '规则已更新' : '规则已新增', refresh: true });
+      }).catch(() => {}).finally(() => { this.saving = false; });
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

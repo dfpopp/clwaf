@@ -1,0 +1,118 @@
+/* ========================================
+   CSS 重置样式
+   ======================================== */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: var(--text-color-primary);
+  background-color: var(--bg-color);
+  min-height: 100vh;
+  width: 100%;
+  height: 100%;
+}
+
+a {
+  color: var(--theme-color);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--theme-color-light-3);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  color: var(--text-color-primary);
+}
+
+[v-cloak] {
+  display: none !important;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-bg);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-color-secondary);
+}
+
+/* 全局过渡 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--transition-duration) var(--transition-timing);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.slide-right-enter-from {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+.slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
+}

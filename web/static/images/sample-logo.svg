@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="48" viewBox="0 0 120 48">
+  <g fill="none" stroke="#e6edf3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" transform="translate(8,10)">
+    <path d="M14 24s10-5 10-12V4L14 1 4 4v8c0 7 10 12 10 12z" fill="rgba(96,165,250,0.15)" stroke="#60a5fa"/>
+  </g>
+  <text x="42" y="30" font-family="-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif" font-size="17" font-weight="700" fill="#e6edf3">示例站点</text>
+</svg>

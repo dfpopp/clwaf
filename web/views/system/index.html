@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系统设置</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ===== 设置容器（铺满，参照安全凭证页全宽布局） ===== */
+    .settings-container { width: 100%; }
+    .settings-container > .card { margin-bottom: 18px; }
+    /* ===== 卡片标题（带图标） ===== */
+    .card-title-wrap { display: flex; align-items: center; gap: 10px; }
+    .card-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    /* ===== 表单网格 ===== */
+    .form-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 20px; }
+    .form-row.cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .form-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .form-row .full { grid-column: 1 / -1; }
+    .field-narrow { max-width: 280px; }
+    /* ===== 带单位的输入框 ===== */
+    .input-with-unit { position: relative; }
+    .input-with-unit .form-input { padding-right: 56px; }
+    .input-with-unit .input-unit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; pointer-events: none; }
+    .input-with-unit .form-input::-webkit-inner-spin-button,
+    .input-with-unit .form-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .input-with-unit .form-input[type=number] { -moz-appearance: textfield; }
+    /* ===== 大开关 ===== */
+    .switch.switch-lg { width: 52px; height: 28px; }
+    .switch.switch-lg .slider::before { height: 20px; width: 20px; left: 4px; bottom: 4px; }
+    .switch.switch-lg input:checked + .slider::before { transform: translateX(24px); }
+    /* ===== 全局防护总开关行 ===== */
+    .master-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; background: var(--bg-body); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; }
+    .master-row .ms-title { font-size: 14px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+    .master-row .ms-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .master-row .ms-control { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .master-row .ms-status { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px; }
+    .master-row .ms-status.on { background: rgba(34,197,94,0.12); color: var(--success); }
+    .master-row .ms-status.off { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+    /* ===== 只读字段 ===== */
+    .form-input[readonly] { background: var(--bg-body); color: var(--text-secondary); cursor: not-allowed; }
+    /* ===== 信息横幅 ===== */
+    .info-banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: var(--accent-soft); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+    .info-banner i { color: var(--accent); margin-top: 3px; flex-shrink: 0; }
+    /* ===== 卡片操作区 ===== */
+    .card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--border); }
+    .card-actions .el-button + .el-button { margin-left: 0; }
+    /* ===== CC 内联阈值 ===== */
+    .th-inline { display: flex; align-items: center; gap: 6px; }
+    .th-inline .form-input { flex-shrink: 0; }
+    .th-unit { color: var(--text-muted); font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+    /* ===== 弹窗（清理确认） ===== */
+    .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); width: 480px; max-width: 92%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); animation: modalIn 0.2s ease; }
+    .modal.modal-sm { width: 420px; }
+    @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+    .modal-title .modal-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .modal-title .modal-icon.icon-danger { background: rgba(239,68,68,0.12); color: var(--danger); }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: var(--text-primary); }
+    .modal-body { padding: 18px 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+    .modal-body .highlight { color: var(--danger); font-weight: 600; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 18px; border-top: 1px solid var(--border); }
+    .modal-footer .el-button + .el-button { margin-left: 0; }
+    /* ===== 下拉框深浅主题适配（与白名单页面一致） ===== */
+    .el-select__wrapper { background-color: var(--bg-card) !important; box-shadow: 0 0 0 1px var(--border) inset !important; }
+    .el-select__wrapper.is-focused { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+    .el-select__selected-item { color: var(--text-primary) !important; }
+    .el-select__placeholder { color: var(--text-muted) !important; }
+    .el-select__popper.el-popper, .el-select-dropdown { background: var(--bg-card) !important; }
+    .el-select-dropdown__item { color: var(--text-secondary); }
+    /* ===== 版本与授权信息卡 ===== */
+    .ver-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; line-height: 1.6; border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-input); }
+    .ver-badge.pro { border-color: rgba(139,92,246,0.45); color: #a78bfa; background: rgba(139,92,246,0.10); }
+    .ver-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 24px; }
+    .ver-item { display: flex; flex-direction: column; gap: 3px; }
+    .ver-item .k { font-size: 11px; color: var(--text-muted); }
+    .ver-item .v { font-size: 13px; color: var(--text-primary); word-break: break-all; }
+    @media (max-width: 900px) { .ver-grid { grid-template-columns: repeat(2, 1fr); } }
+    /* ===== 响应式 ===== */
+    @media (max-width: 768px) { .form-row, .form-row.cols-2, .form-row.cols-4 { grid-template-columns: 1fr; } .master-row { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="layout">
+    <div class="main">
+      <div class="content">
+        <div class="settings-container" v-loading="loading">
+
+          <!-- ===== 版本与授权信息卡（/api/system/info） ===== -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon icon-blue"><i class="fa-solid fa-certificate"></i></span>
+                <span class="card-title">版本与授权</span>
+              </div>
+              <span class="card-extra">版本形态与运行时状态</span>
+            </div>
+            <div class="card-body" v-if="sysInfo">
+              <div v-if="renewBanner" class="info-banner" :style="{ background: renewBanner.bg, borderColor: renewBanner.border }">
+                <i class="fa-solid fa-triangle-exclamation" :style="{ color: renewBanner.color }"></i>
+                <span>{{ renewBanner.text }}</span>
+              </div>
+              <div class="ver-grid">
+                <div class="ver-item"><span class="k">品牌</span><span class="v">{{ sysInfo.brand }}</span></div>
+                <div class="ver-item"><span class="k">版本号</span><span class="v">{{ sysInfo.version }}</span></div>
+                <div class="ver-item"><span class="k">构建时间</span><span class="v">{{ sysInfo.build_time }}</span></div>
+                <div class="ver-item"><span class="k">版本形态</span><span class="v"><span class="ver-badge" :class="sysInfo.edition">{{ editionLabel }}</span></span></div>
+                <div class="ver-item"><span class="k">运行时状态</span><span class="v">{{ sysInfo.state_label }}</span></div>
+                <div class="ver-item"><span class="k">授权剩余天数</span><span class="v">{{ daysLeftText }}</span></div>
+                <div class="ver-item"><span class="k">授权到期时间</span><span class="v">{{ sysInfo.expire_at || '—' }}</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 基础配置 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon icon-blue"><i class="fa-solid fa-user-gear"></i></span>
+                <span class="card-title">基础配置</span>
+              </div>
+              <span class="card-extra">账户与会话设置</span>
+            </div>
+            <div class="card-body">
+              <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
+                <el-form-item label="原始日志存储路径">
+                  <el-input v-model.trim="form.rawLogPath" placeholder="runtime/data/access/"></el-input>
+                  <div class="form-hint">引擎写入原始请求日志的磁盘目录，修改后新日志写入新路径</div>
+                </el-form-item>
+                <el-form-item label="管理员用户名">
+                  <el-input :model-value="adminName" readonly></el-input>
+                  <div class="form-hint">系统默认管理员账户，不可修改</div>
+                </el-form-item>
+                <div class="section-title" style="margin: 8px 0 14px;">修改密码</div>
+                <div class="form-row">
+                  <el-form-item label="旧密码">
+                    <el-input v-model="pwd.old" type="password" show-password placeholder="请输入当前密码" autocomplete="current-password"></el-input>
+                  </el-form-item>
+                  <el-form-item label="新密码">
+                    <el-input v-model="pwd.next" type="password" show-password placeholder="至少 6 位字符" autocomplete="new-password"></el-input>
+                  </el-form-item>
+                  <el-form-item label="确认新密码">
+                    <el-input v-model="pwd.confirm" type="password" show-password placeholder="再次输入新密码" autocomplete="new-password"></el-input>
+                  </el-form-item>
+                </div>
+                <el-form-item label="会话超时时间" class="field-narrow">
+                  <div style="width:100%;">
+                    <div class="input-with-unit">
+                      <el-input-number v-model="form.sessionTimeout" :min="15" :max="1440" style="width:100%"></el-input-number>
+                      <span class="input-unit">分钟</span>
+                    </div>
+                    <div class="form-hint">无操作超过该时间将自动退出登录（1~1440）</div>
+                  </div>
+                </el-form-item>
+                <el-form-item>
+                  <div class="card-actions" style="width:100%;">
+                    <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+
+          <!-- ===== 引擎接入配置 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon icon-blue"><i class="fa-solid fa-plug"></i></span>
+                <span class="card-title">引擎接入配置</span>
+              </div>
+              <span class="card-extra">引擎自产接口/资源统一 URL 前缀</span>
+            </div>
+            <div class="card-body">
+              <div class="info-banner">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>人机验证、排队等自产接口与静态/上传资源全部挂在此专属前缀下，源站可使用 /static、/upload、/assets 等任意通用目录而不与引擎冲突。修改后需<span style="color:var(--danger)">重启引擎</span>生效，并同步重新导入挑战/等候室模板。</span>
+              </div>
+              <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
+                <el-form-item label="引擎专属前缀" style="max-width: 380px;">
+                  <div style="width:100%;">
+                    <div class="input-with-unit">
+                      <el-input v-model.trim="form.wafUrlPrefix" placeholder="waf"></el-input>
+                      <span class="input-unit">/</span>
+                    </div>
+                    <div class="form-hint">默认“waf”，即接口形如 /waf/challenge/verify；仅支持数字、字母、下划线</div>
+                  </div>
+                </el-form-item>
+                <el-form-item>
+                  <div class="card-actions" style="width:100%;">
+                    <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+
+          <!-- ===== 防护配置 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon icon-purple"><i class="fa-solid fa-shield-halved"></i></span>
+                <span class="card-title">防护配置</span>
+              </div>
+              <span class="card-extra">全局防护参数</span>
+            </div>
+            <div class="card-body">
+              <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
+                <div class="master-row">
+                  <div class="ms-info">
+                    <div class="ms-title"><i class="fa-solid fa-power-off" style="color:var(--success)"></i> 全局防护总开关</div>
+                    <div class="ms-desc">关闭后所有防护规则将停止拦截，仅记录日志并放行流量</div>
+                  </div>
+                  <div class="ms-control">
+                    <span class="ms-status" :class="form.protectSwitch ? 'on' : 'off'">{{ form.protectSwitch ? '已开启' : '已关闭' }}</span>
+                    <el-switch v-model="form.protectSwitch"></el-switch>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <el-form-item label="最大并发连接数">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.maxConn" :min="1" :max="1000000" style="width:100%"></el-input-number>
+                        <span class="input-unit">个</span>
+                      </div>
+                      <div class="form-hint">单实例同时承载连接上限</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="请求超时时间">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.reqTimeout" :min="1" :max="600" style="width:100%"></el-input-number>
+                        <span class="input-unit">秒</span>
+                      </div>
+                      <div class="form-hint">单次请求处理超时阈值</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="挑战会话数量上限">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.challengeMax" :min="1000" :max="10000000" style="width:100%"></el-input-number>
+                        <span class="input-unit">个</span>
+                      </div>
+                      <div class="form-hint">极端并发下在内存中同时保留的人机验证/JS挑战会话上限，超过时优先逐出最接近过期的会话</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="0秒挑战通过阈值">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.zsecPassScore" :min="20" :max="95" style="width:100%"></el-input-number>
+                        <span class="input-unit">分</span>
+                      </div>
+                      <div class="form-hint">0秒档（透明注入）采集评分的通过线（百分制扣分制，默认60）：评分达到阈值签发放行凭证，低于则下一次请求升级为1秒JS挑战</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="老内核访客策略">
+                    <div style="width:100%;">
+                      <el-select v-model="form.legacyPolicy" style="width:100%">
+                        <el-option label="引导升级（跳浏览器升级引导页，推荐）" value="guide"></el-option>
+                        <el-option label="IE专项验证（老内核访客完成图形验证码后可访问）" value="ie_captcha"></el-option>
+                      </el-select>
+                      <div class="form-hint">前端能力探测判定老内核（与UA无关，伪造IE请求头无收益）：引导升级=双核浏览器一键切极速即恢复；专项验证=老内核访客完成图形验证码后可正常访问</div>
+                    </div>
+                  </el-form-item>
+                </div>
+                <el-form-item>
+                  <div class="card-actions" style="width:100%;">
+                    <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+
+          <!-- ===== 数据清理配置 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon icon-orange"><i class="fa-solid fa-broom"></i></span>
+                <span class="card-title">数据清理配置</span>
+              </div>
+              <span class="card-extra">日志保留与聚合策略</span>
+            </div>
+            <div class="card-body">
+              <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
+                <div class="info-banner">
+                  <i class="fa-solid fa-circle-info"></i>
+                  <span>清理任务将按“统计数据聚合间隔”周期执行；立即清理将删除超过保留期的历史数据，操作不可恢复。</span>
+                </div>
+                <div class="form-row cols-2">
+                  <el-form-item label="攻击日志保留天数">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.attackLogDays" :min="2" :max="30" style="width:100%"></el-input-number>
+                        <span class="input-unit">天</span>
+                      </div>
+                      <div class="form-hint">攻击日志超过该天数将被清理</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="审计日志保留天数">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.auditLogDays" :min="7" :max="90" style="width:100%"></el-input-number>
+                        <span class="input-unit">天</span>
+                      </div>
+                      <div class="form-hint">审计日志超过该天数将被清理</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="引擎日志保留天数">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.engineLogDays" :min="2" :max="90" style="width:100%"></el-input-number>
+                        <span class="input-unit">天</span>
+                      </div>
+                      <div class="form-hint">引擎日志超过该天数将被清理</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="人机验证记录保留天数">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.challengeRecordDays" :min="1" :max="90" style="width:100%"></el-input-number>
+                        <span class="input-unit">天</span>
+                      </div>
+                      <div class="form-hint">人机验证明细记录超过该天数将被清理；小时统计随访问统计保留期</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="磁盘原始日志保留天数">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.rawLogDays" :min="1" :max="90" style="width:100%"></el-input-number>
+                        <span class="input-unit">天</span>
+                      </div>
+                      <div class="form-hint">磁盘原始日志文件超过该天数将被清理</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="请求维度统计保留天数">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.dimStatsDays" :min="1" :max="90" style="width:100%"></el-input-number>
+                        <span class="input-unit">天</span>
+                      </div>
+                      <div class="form-hint">IP/URL/UA 排行、地域、状态码等分布数据；每小时自动裁剪只保留前 200（地域前 10），超期数据被清理</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="去重统计小时数据保留时长">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.dedupHourHours" :min="26" :max="168" style="width:100%"></el-input-number>
+                        <span class="input-unit">小时</span>
+                      </div>
+                      <div class="form-hint">独立IP/UV/攻击IP 的小时草图（24 小时视图数据源）；建议不低于 48，以便天级汇总失败时可自愈</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="去重统计天级数据保留天数">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.dedupDayDays" :min="7" :max="365" style="width:100%"></el-input-number>
+                        <span class="input-unit">天</span>
+                      </div>
+                      <div class="form-hint">独立IP/UV/攻击IP 的天级草图（7 天 / 30 天视图数据源）；建议不小于仪表盘最大统计范围</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="统计数据聚合间隔">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.aggInterval" :min="1" :max="60" style="width:100%"></el-input-number>
+                        <span class="input-unit">分钟</span>
+                      </div>
+                      <div class="form-hint">访问统计聚合任务执行的周期</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="原始日志批量落库阈值">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.rawLogBatchSize" :min="100" :max="50000" style="width:100%"></el-input-number>
+                        <span class="input-unit">条</span>
+                      </div>
+                      <div class="form-hint">积压日志达到该条数即整批写入磁盘</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="原始日志落库时间阈值">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.rawLogFlushSeconds" :min="1" :max="60" style="width:100%"></el-input-number>
+                        <span class="input-unit">秒</span>
+                      </div>
+                      <div class="form-hint">按该周期定时把积压日志写入磁盘</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="磁盘清理阈值">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.diskCleanThreshold" :min="1" :max="1000" style="width:100%"></el-input-number>
+                        <span class="input-unit">G</span>
+                      </div>
+                      <div class="form-hint">原始日志目录占用达到该值(G)时，按文件修改时间正序清理最旧文件，直到低于 80% 阈值停止</div>
+                    </div>
+                  </el-form-item>
+                </div>
+                <el-form-item>
+                  <div class="card-actions" style="width:100%;">
+                    <el-button type="danger" @click="openCleanupModal"><i class="fa-solid fa-trash-can"></i> 立即执行清理</el-button>
+                    <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+
+          <!-- ===== 等候室配置 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fa-solid fa-clock"></i> 等候室配置</span>
+              <span class="card-extra">排队用户轮询心跳与放行凭证有效期</span>
+            </div>
+            <div class="card-body">
+              <el-form class="form-grid" style="grid-template-columns:repeat(2,1fr);" :model="form" label-position="top" @submit.prevent="saveBasic">
+                <el-form-item label="等候室心跳时长（秒）">
+                  <el-input-number v-model="form.heartbeatInterval" :min="5" :max="120" style="width:100%"></el-input-number>
+                  <div class="form-hint">用户轮询超时时间，心跳超时自动出队释放坐席</div>
+                </el-form-item>
+                <el-form-item label="保底放行速率（人/秒）">
+                  <el-input-number v-model="form.ccFloorRate" :min="1" :max="100" style="width:100%"></el-input-number>
+                  <div class="form-hint">阈值顶满时每秒仍保底放行 N 人防饿死（队列500人÷5=100秒消化完）</div>
+                </el-form-item>
+                <el-form-item label="放行凭证有效期（秒）">
+                  <el-input-number v-model="form.ticketValidity" :min="5" :max="120" style="width:100%"></el-input-number>
+                  <div class="form-hint">排队轮到后等候凭证有效时间，过期需重新排队</div>
+                </el-form-item>
+                <el-form-item label="等候凭证Cookie名">
+                  <el-input v-model.trim="form.waitingCookieName" placeholder="waf_waiting"></el-input>
+                  <div class="form-hint">等候室通过后签发的通行凭证Cookie名，与挑战凭证独立</div>
+                </el-form-item>
+                <el-form-item style="grid-column:1/-1;">
+                  <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+
+          <!-- ===== CC 防护默认值 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fa-solid fa-shield"></i> CC 防护默认值</span>
+              <span class="card-extra">CC 规则未配置时使用系统默认值</span>
+            </div>
+            <div class="card-body">
+              <el-form class="form-grid" style="grid-template-columns:repeat(2,1fr);" :model="form" label-position="top" @submit.prevent="saveBasic">
+                <el-form-item label="应用级触发阈值">
+                  <div style="width:100%;">
+                    <div class="th-inline">
+                      <el-input-number v-model="form.ccSiteWin" :min="1" :controls="false" style="width:70px;"></el-input-number>
+                      <span class="th-unit">分钟内总请求</span>
+                      <el-input-number v-model="form.ccSiteRate" :min="1" :controls="false" style="width:90px;"></el-input-number>
+                      <span class="th-unit">次进入</span>
+                    </div>
+                    <div class="form-hint">同一应用 N 分钟内总请求 ≥ M 次 → 后续请求进入等候室（全局兜底）</div>
+                  </div>
+                </el-form-item>
+                <el-form-item label="队列容量（坐席数）">
+                  <el-input-number v-model="form.ccQueueCapacity" :min="1" style="width:100%"></el-input-number>
+                  <div class="form-hint">队列坐席满 → 新请求返回 503 过载拦截页</div>
+                </el-form-item>
+                <el-form-item style="grid-column:1/-1;">
+                  <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 清理确认弹窗 -->
+  <div class="modal-mask" v-show="cleanupModal.show" @click.self="closeCleanupModal">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <span class="modal-title"><span class="modal-icon icon-danger"><i class="fa-solid fa-triangle-exclamation"></i></span>执行清理确认</span>
+        <button class="modal-close" @click="closeCleanupModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">确认立即执行数据清理？<br>系统将删除超过保留期的攻击日志、审计日志、人机验证记录与磁盘原始日志，该操作<span class="highlight">不可恢复</span>。</div>
+      <div class="modal-footer">
+        <el-button @click="closeCleanupModal">取消</el-button>
+        <el-button type="danger" @click="confirmCleanup"><i class="fa-solid fa-trash-can"></i> 确认清理</el-button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      loading: false, saving: false,
+      adminName: sessionStorage.getItem('waf_admin_name') || 'admin',
+      pwd: { old: '', next: '', confirm: '' },
+      cleanupModal: { show: false },
+      sysInfo: null, // 版本与授权信息（/api/system/info）
+      form: {
+        sessionTimeout: 30, protectSwitch: true, rawLogPath: '', wafUrlPrefix: 'waf',
+        maxConn: 10000, reqTimeout: 30,
+        challengeMax: 50000, zsecPassScore: 60, legacyPolicy: 'guide',
+        attackLogDays: 30, auditLogDays: 30, engineLogDays: 30, rawLogDays: 7, aggInterval: 5,
+        challengeRecordDays: 3, dimStatsDays: 30, dedupHourHours: 48, dedupDayDays: 30,
+        rawLogBatchSize: 5000, rawLogFlushSeconds: 5, diskCleanThreshold: 10,
+        heartbeatInterval: 45, ticketValidity: 10, waitingCookieName: 'waf_waiting', ccFloorRate: 5,
+        ccSiteWin: 1, ccSiteRate: 10000, ccQueueCapacity: 1000,
+        // 访问统计/分析批次沿用统一全局保留期，UI 不展示，保存时透传避免覆盖
+        _logRetention: 30
+      }
+    };
+  },
+  mounted() { this.loadInfo(); this.loadConfig(); },
+  computed: {
+    editionLabel() {
+      return this.sysInfo ? (this.sysInfo.edition === 'pro' ? 'Pro 版' : '免费版') : '-';
+    },
+    daysLeftText() {
+      const d = this.sysInfo ? this.sysInfo.days_left : null;
+      if (d === null || d === undefined || d < 0) return '—';
+      return d + ' 天';
+    },
+    /* 续费提醒横幅（仅 Pro）：三态③强提醒 / 宽限期提醒 / 到期前 30/7/1 天分级提醒 */
+    renewBanner() {
+      const i = this.sysInfo;
+      if (!i || i.edition !== 'pro') return null;
+      if (i.state === 3) {
+        return { text: '授权已过期超过 48 小时，防护功能已停用（仅保留攻击拦截与业务转发），请立即续费恢复防护。', color: 'var(--danger)', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.35)' };
+      }
+      if (i.state === 2) {
+        return { text: '授权已到期，当前处于 48 小时宽限期（全功能保留），请尽快续费，逾期将自动停用防护功能。', color: 'var(--warning)', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.35)' };
+      }
+      const d = i.days_left;
+      if (d >= 0 && d <= 30) {
+        if (d <= 1) return { text: '授权将于 ' + (d <= 0 ? '不足 1 天' : d + ' 天') + '后到期，请立即续费以免防护中断。', color: 'var(--danger)', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.35)' };
+        if (d <= 7) return { text: '授权将于 ' + d + ' 天后到期，请及时续费。', color: 'var(--warning)', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.35)' };
+        return { text: '授权将于 ' + d + ' 天后到期，可提前续费获得无缝衔接。', color: 'var(--text-secondary)', bg: 'var(--accent-soft)', border: 'var(--border)' };
+      }
+      return null;
+    }
+  },
+  methods: {
+    /* loadInfo 拉取版本与授权信息（App.info 全局缓存命中则直接复用） */
+    loadInfo() {
+      const cached = App.info;
+      if (cached) { this.sysInfo = cached; return; }
+      App.loadInfo().then((info) => { this.sysInfo = info; });
+    },
+    loadConfig() {
+      this.loading = true;
+      App.api.system.config().then((c) => {
+        if (c) {
+          const f = this.form;
+          f.sessionTimeout = Math.max(1, Math.round((c.session_timeout || 1800) / 60));
+          f.protectSwitch = c.global_enabled === 1;
+          f.rawLogPath = c.raw_log_path || '';
+          f.wafUrlPrefix = c.waf_url_prefix || 'waf';
+          f.maxConn = c.max_conn || 10000;
+          f.reqTimeout = c.req_timeout || 30;
+          f.challengeMax = c.challenge_max_sessions || 50000;
+          f.zsecPassScore = c.zsec_pass_score || 60;
+          f.legacyPolicy = (c.legacy_policy === 'ie_captcha') ? 'ie_captcha' : 'guide';
+          f.attackLogDays = c.attack_log_retention_days || 30;
+          f.auditLogDays = c.audit_log_retention_days || 30;
+          f.engineLogDays = c.engine_log_retention_days || 30;
+          f.rawLogDays = c.raw_log_retention_days || 7;
+          f.challengeRecordDays = c.challenge_record_retention_days || 3;
+          f.dimStatsDays = c.dim_stats_retention_days || 30;
+          f.dedupHourHours = c.dedup_hour_retention_hours || 48;
+          f.dedupDayDays = c.dedup_day_retention_days || 30;
+          f.aggInterval = c.stats_agg_interval || 5;
+          f.rawLogBatchSize = c.raw_log_batch_size || 5000;
+          f.rawLogFlushSeconds = c.raw_log_flush_seconds || 5;
+          f.diskCleanThreshold = c.disk_clean_threshold || 10;
+          f.heartbeatInterval = c.heartbeat_interval || 45;
+          f.ccFloorRate = c.cc_waiting_floor_rate || 5;
+          f.ticketValidity = c.ticket_validity || 10;
+          f.waitingCookieName = c.waiting_cookie_name || 'waf_waiting';
+          f.ccSiteWin = c.cc_site_window || 1;
+          f.ccSiteRate = c.cc_site_rate || 10000;
+          f.ccQueueCapacity = c.cc_waiting_max_size || 1000;
+          f._logRetention = c.log_retention_days || 30;
+        }
+      }).finally(() => this.loading = false);
+    },
+    saveBasic() {
+      const f = this.form;
+      // 密码校验：任一填写则全部必填
+      let pwdChanged = false;
+      const p = this.pwd;
+      if (p.old || p.next || p.confirm) {
+        if (!p.old || !p.next || !p.confirm) { ElementPlus.ElMessage.warning('请完整填写旧密码、新密码与确认密码'); return; }
+        if (p.next.length < 6) { ElementPlus.ElMessage.warning('新密码至少需要 6 位字符'); return; }
+        if (p.next !== p.confirm) { ElementPlus.ElMessage.warning('两次输入的新密码不一致'); return; }
+        if (p.next === p.old) { ElementPlus.ElMessage.warning('新密码不能与旧密码相同'); return; }
+        pwdChanged = true;
+      }
+      if (!Number.isFinite(f.sessionTimeout) || f.sessionTimeout < 1 || f.sessionTimeout > 1440) { ElementPlus.ElMessage.warning('会话超时时间需在 1~1440 分钟之间'); return; }
+      if (!Number.isFinite(f.maxConn) || f.maxConn < 1 || f.maxConn > 1000000) { ElementPlus.ElMessage.warning('最大并发连接数需在 1~1000000 之间'); return; }
+      if (!Number.isFinite(f.reqTimeout) || f.reqTimeout < 1 || f.reqTimeout > 600) { ElementPlus.ElMessage.warning('请求超时时间需在 1~600 秒之间'); return; }
+      if (!Number.isFinite(f.challengeMax) || f.challengeMax < 1000 || f.challengeMax > 10000000) { ElementPlus.ElMessage.warning('挑战会话数量上限需在 1000~10000000 之间'); return; }
+      if (!Number.isFinite(f.zsecPassScore) || f.zsecPassScore < 20 || f.zsecPassScore > 95) { ElementPlus.ElMessage.warning('0秒挑战通过阈值需在 20~95 分之间'); return; }
+      if (!Number.isFinite(f.attackLogDays) || f.attackLogDays < 2 || f.attackLogDays > 30) { ElementPlus.ElMessage.warning('攻击日志保留天数需在 2~30 天之间'); return; }
+      if (!Number.isFinite(f.auditLogDays) || f.auditLogDays < 7 || f.auditLogDays > 90) { ElementPlus.ElMessage.warning('审计日志保留天数需在 7~90 天之间'); return; }
+      if (!Number.isFinite(f.engineLogDays) || f.engineLogDays < 2 || f.engineLogDays > 90) { ElementPlus.ElMessage.warning('引擎日志保留天数需在 2~90 天之间'); return; }
+      if (!Number.isFinite(f.rawLogDays) || f.rawLogDays < 1 || f.rawLogDays > 90) { ElementPlus.ElMessage.warning('磁盘原始日志保留天数需在 1~90 天之间'); return; }
+      if (!Number.isFinite(f.challengeRecordDays) || f.challengeRecordDays < 1 || f.challengeRecordDays > 90) { ElementPlus.ElMessage.warning('人机验证记录保留天数需在 1~90 天之间'); return; }
+      if (!Number.isFinite(f.dimStatsDays) || f.dimStatsDays < 1 || f.dimStatsDays > 90) { ElementPlus.ElMessage.warning('请求维度统计保留天数需在 1~90 天之间'); return; }
+      if (!Number.isFinite(f.dedupHourHours) || f.dedupHourHours < 26 || f.dedupHourHours > 168) { ElementPlus.ElMessage.warning('去重统计小时数据保留时长需在 26~168 小时之间'); return; }
+      if (!Number.isFinite(f.dedupDayDays) || f.dedupDayDays < 7 || f.dedupDayDays > 365) { ElementPlus.ElMessage.warning('去重统计天级数据保留天数需在 7~365 天之间'); return; }
+      if (!Number.isFinite(f.aggInterval) || f.aggInterval < 1 || f.aggInterval > 60) { ElementPlus.ElMessage.warning('统计数据聚合间隔需在 1~60 分钟之间'); return; }
+      if (!Number.isFinite(f.rawLogBatchSize) || f.rawLogBatchSize < 100 || f.rawLogBatchSize > 50000) { ElementPlus.ElMessage.warning('原始日志批量落库阈值需在 100~50000 条之间'); return; }
+      if (!Number.isFinite(f.rawLogFlushSeconds) || f.rawLogFlushSeconds < 1 || f.rawLogFlushSeconds > 60) { ElementPlus.ElMessage.warning('原始日志落库时间阈值需在 1~60 秒之间'); return; }
+      if (!Number.isFinite(f.diskCleanThreshold) || f.diskCleanThreshold < 1 || f.diskCleanThreshold > 1000) { ElementPlus.ElMessage.warning('磁盘清理阈值需在 1~1000 G 之间'); return; }
+      if (!Number.isFinite(f.heartbeatInterval) || f.heartbeatInterval < 5 || f.heartbeatInterval > 120) { ElementPlus.ElMessage.warning('等候室心跳时长需在 5~120 秒之间'); return; }
+      if (!Number.isFinite(f.ccFloorRate) || f.ccFloorRate < 1 || f.ccFloorRate > 100) { ElementPlus.ElMessage.warning('保底放行速率需在 1~100 人/秒之间'); return; }
+      if (!Number.isFinite(f.ticketValidity) || f.ticketValidity < 5 || f.ticketValidity > 120) { ElementPlus.ElMessage.warning('放行凭证有效期需在 5~120 秒之间'); return; }
+      if (!Number.isFinite(f.ccSiteWin) || f.ccSiteWin < 1) { ElementPlus.ElMessage.warning('应用级时间窗需 ≥ 1 分钟'); return; }
+      if (!Number.isFinite(f.ccSiteRate) || f.ccSiteRate < 1) { ElementPlus.ElMessage.warning('应用级次数需 ≥ 1'); return; }
+      if (!Number.isFinite(f.ccQueueCapacity) || f.ccQueueCapacity < 1) { ElementPlus.ElMessage.warning('队列容量需 ≥ 1'); return; }
+      if (!/^[a-zA-Z0-9_]+$/.test(f.wafUrlPrefix || '')) { ElementPlus.ElMessage.warning('引擎专属前缀仅支持数字、字母、下划线'); return; }
+      this.saving = true;
+      let msg = '配置已保存';
+      App.api.system.save({
+        session_timeout: f.sessionTimeout * 60, global_enabled: App.to01(f.protectSwitch), raw_log_path: f.rawLogPath || '',
+        waf_url_prefix: f.wafUrlPrefix || 'waf',
+        max_conn: f.maxConn, req_timeout: f.reqTimeout, challenge_max_sessions: f.challengeMax, zsec_pass_score: f.zsecPassScore, legacy_policy: f.legacyPolicy || 'guide',
+        attack_log_retention_days: f.attackLogDays, audit_log_retention_days: f.auditLogDays, engine_log_retention_days: f.engineLogDays, raw_log_retention_days: f.rawLogDays, stats_agg_interval: f.aggInterval,
+        heartbeat_interval: f.heartbeatInterval, ticket_validity: f.ticketValidity, waiting_cookie_name: f.waitingCookieName || 'waf_waiting', cc_waiting_floor_rate: f.ccFloorRate,
+        cc_site_window: f.ccSiteWin, cc_site_rate: f.ccSiteRate, cc_waiting_max_size: f.ccQueueCapacity,
+        raw_log_batch_size: f.rawLogBatchSize, raw_log_flush_seconds: f.rawLogFlushSeconds, disk_clean_threshold: f.diskCleanThreshold, log_retention_days: f._logRetention,
+        challenge_record_retention_days: f.challengeRecordDays,
+        dim_stats_retention_days: f.dimStatsDays, dedup_hour_retention_hours: f.dedupHourHours, dedup_day_retention_days: f.dedupDayDays
+      }).then(() => {
+        if (pwdChanged) {
+          return App.api.common.changePwd(p.old, p.next)
+            .then(() => { this.pwd = { old: '', next: '', confirm: '' }; msg = '配置已保存，密码已更新'; })
+            .catch(() => { msg = '配置已保存，但密码修改失败'; });
+        }
+        return null;
+      }).then(() => {
+        ElementPlus.ElMessage.success(msg || '配置已保存');
+      }).finally(() => this.saving = false);
+    },
+    openCleanupModal() { this.cleanupModal.show = true; },
+    closeCleanupModal() { this.cleanupModal.show = false; },
+    confirmCleanup() {
+      this.closeCleanupModal();
+      App.api.system.cleanupNow()
+        .then((res) => { ElementPlus.ElMessage.success(res && res.msg ? res.msg : '清理任务已完成'); })
+        .catch(() => {});
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

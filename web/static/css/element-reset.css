@@ -1,0 +1,684 @@
+/* ============================================================
+   Element Plus 组件主题重置（所有页面共用，含主框架 index.html）
+   - 外观 1:1 对齐 UI 参考（原生 form-input / btn / modal 样式）
+   - 深色/浅色主题自适应（CSS 变量来自 common.css）
+   - 涵盖：按钮 / 输入框 / 下拉框 / 表单 / 弹窗 / 确认框 / 消息
+           / 分页 / 开关 / 复选 / 单选 / 标签 / 表格 / 卡片 / 浮层
+   ============================================================ */
+
+/* ===== 0. Element Plus 全局变量映射到主题变量 ===== */
+:root {
+  --el-color-primary: var(--accent);
+  --el-color-primary-light-3: var(--accent);
+  --el-color-primary-light-5: var(--accent);
+  --el-color-primary-light-7: var(--accent);
+  --el-color-primary-light-8: var(--accent);
+  --el-color-primary-light-9: var(--accent-soft);
+  --el-color-primary-dark-2: var(--accent);
+  --el-color-success: var(--success);
+  --el-color-warning: var(--warning);
+  --el-color-danger: var(--danger);
+  --el-color-error: var(--danger);
+  --el-color-info: var(--text-muted);
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+  --el-border-color-lighter: var(--border);
+  --el-border-color-extra-light: var(--border);
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-secondary);
+  --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: var(--text-muted);
+  --el-text-color-disabled: var(--text-muted);
+  --el-font-size-base: 13px;
+  --el-font-family: var(--font);
+  --el-fill-color-blank: var(--bg-card);
+  --el-fill-color-light: var(--bg-card-hover);
+  --el-fill-color: var(--bg-card-hover);
+  --el-bg-color: var(--bg-card);
+  --el-bg-color-overlay: var(--bg-card);
+  --el-disabled-bg-color: var(--bg-card-hover);
+  --el-disabled-border-color: var(--border);
+  --el-disabled-text-color: var(--text-muted);
+  --el-mask-color: rgba(0, 0, 0, 0.5);
+  --el-component-size: 35px;
+}
+
+/* ============================================================
+   1. 按钮（对齐 .btn / .btn-primary / .btn-outline / .btn-danger）
+   ============================================================ */
+.el-button {
+  height: 35px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--font);
+  font-weight: 400;
+  border: 1px solid var(--border);
+  gap: 6px;
+  /* hover 只变边框不变底色：禁用 EP 默认的 hover 底色填充 */
+  --el-button-hover-bg-color: transparent;
+  --el-button-active-bg-color: transparent;
+  --el-button-hover-border-color: var(--accent);
+  --el-button-hover-text-color: var(--accent);
+}
+.el-button + .el-button { margin-left: 10px; }
+.el-button:focus { outline: none; }
+
+/* 默认按钮 = btn-outline（透明底 + 边框），hover 仅边框/文字变色 */
+.el-button--default {
+  background-color: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.el-button--default:hover,
+.el-button--default:focus {
+  background-color: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.el-button--default.is-plain,
+.el-button--default.is-text { background-color: transparent; }
+
+/* 主要按钮 = btn-primary（accent 实底白字），hover 底色保持不变 */
+.el-button--primary {
+  --el-button-hover-bg-color: var(--accent);
+  --el-button-active-bg-color: var(--accent);
+  --el-button-hover-border-color: var(--accent);
+  --el-button-hover-text-color: #fff;
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.el-button--primary:hover,
+.el-button--primary:focus {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.el-button--primary.is-plain,
+.el-button--primary.is-link {
+  --el-button-hover-bg-color: transparent;
+  background-color: transparent;
+  color: var(--accent);
+}
+.el-button--primary.is-plain:hover,
+.el-button--primary.is-link:hover {
+  background-color: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 危险按钮 = btn-danger（淡红底红字），hover 仅边框变色，底色不变 */
+.el-button--danger {
+  --el-button-hover-bg-color: rgba(239, 68, 68, 0.12);
+  --el-button-active-bg-color: rgba(239, 68, 68, 0.12);
+  --el-button-hover-border-color: var(--danger);
+  --el-button-hover-text-color: var(--danger);
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: transparent;
+  color: var(--danger);
+}
+.el-button--danger:hover,
+.el-button--danger:focus {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.el-button--danger.is-plain,
+.el-button--danger.is-link {
+  background-color: transparent;
+  color: var(--danger);
+}
+.el-button--danger.is-plain:hover,
+.el-button--danger.is-link:hover {
+  background-color: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* 成功按钮，hover 底色保持不变 */
+.el-button--success {
+  --el-button-hover-bg-color: var(--success);
+  --el-button-active-bg-color: var(--success);
+  --el-button-hover-border-color: var(--success);
+  --el-button-hover-text-color: #fff;
+  background-color: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+.el-button--success:hover,
+.el-button--success:focus {
+  background-color: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+/* 小按钮 = btn-sm */
+.el-button--small {
+  height: 27px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+/* 链接按钮 */
+.el-button.is-link { border-color: transparent; background: none; color: var(--accent); height: auto; padding: 2px 4px; }
+.el-button.is-link:hover { color: var(--accent); opacity: 0.8; }
+
+/* 禁用态 */
+.el-button.is-disabled,
+.el-button.is-disabled:hover {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 圆形图标按钮（分页翻页等） */
+.el-button.is-circle { border-radius: 50%; }
+
+/* loading 图标颜色跟随文字 */
+.el-button.is-loading { opacity: 0.6; }
+
+/* ============================================================
+   2. 输入框 / 文本域（对齐 .form-input：bg-card 底 + border + 圆角8）
+   ============================================================ */
+.el-input { --el-input-bg-color: var(--bg-card); --el-fill-color-blank: var(--bg-card); }
+.el-input__wrapper {
+  background-color: var(--bg-card) !important;
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+  border-radius: 8px;
+  padding: 1px 12px;
+}
+.el-input__wrapper:hover { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+.el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+/* ===== 表单验证错误态（el-form rules 校验失败时边框变红，否则被上方 !important 覆盖） ===== */
+.el-form-item.is-error .el-input__wrapper { box-shadow: 0 0 0 1px var(--danger) inset !important; }
+.el-form-item.is-error .el-input__wrapper:hover,
+.el-form-item.is-error .el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--danger) inset !important; }
+.el-input__inner {
+  color: var(--text-primary) !important;
+  font-size: 13px;
+  font-family: var(--font);
+  height: 33px;
+  line-height: 33px;
+}
+.el-input__inner::placeholder { color: var(--text-muted); }
+.el-input__prefix, .el-input__suffix { color: var(--text-muted); }
+.el-input.is-disabled .el-input__wrapper { background-color: var(--bg-card-hover) !important; box-shadow: 0 0 0 1px var(--border) inset !important; }
+.el-input.is-disabled .el-input__inner { color: var(--text-muted); cursor: not-allowed; }
+
+/* 密码可见 / 清空按钮 */
+.el-input__password { color: var(--text-muted); }
+.el-input__password:hover { color: var(--text-secondary); }
+
+/* 带前后置内容的组合输入框 */
+.el-input-group__append,
+.el-input-group__prepend {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border);
+  box-shadow: 0 1px 0 0 var(--border) inset;
+  color: var(--text-secondary);
+}
+.el-input-group__append .el-button,
+.el-input-group__prepend .el-button { margin: 0; height: auto; border: none; background: none; }
+
+/* 文本域 */
+.el-textarea { --el-input-bg-color: var(--bg-card); --el-fill-color-blank: var(--bg-card); }
+.el-textarea__inner {
+  background-color: var(--bg-card) !important;
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+  border-radius: 8px;
+  color: var(--text-primary) !important;
+  font-size: 13px;
+  font-family: var(--font);
+  padding: 9px 12px;
+}
+.el-textarea__inner:hover { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+.el-textarea__inner:focus { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+.el-textarea__inner::placeholder { color: var(--text-muted); }
+/* 表单验证错误态：textarea 边框变红 */
+.el-form-item.is-error .el-textarea__inner { box-shadow: 0 0 0 1px var(--danger) inset !important; }
+.el-form-item.is-error .el-textarea__inner:hover,
+.el-form-item.is-error .el-textarea__inner:focus { box-shadow: 0 0 0 1px var(--danger) inset !important; }
+
+/* 计数器 */
+.el-input .el-input__count { color: var(--text-muted); font-size: 11px; }
+
+/* ============================================================
+   3. 下拉框 el-select（新结构 el-select__wrapper）
+   ============================================================ */
+.el-select { --el-fill-color-blank: var(--bg-card); }
+.el-select__wrapper {
+  background-color: var(--bg-card) !important;
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+  border-radius: 8px;
+  min-height: 35px;
+  padding: 4px 12px;
+}
+.el-select__wrapper:hover,
+.el-select__wrapper.is-hovering { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+.el-select__wrapper.is-focused { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+.el-select__placeholder { color: var(--text-muted) !important; font-size: 13px; }
+.el-select__placeholder.is-transparent { color: var(--text-muted) !important; }
+.el-select__selected-item { color: var(--text-primary) !important; font-size: 13px; }
+.el-select__caret { color: var(--text-muted); }
+.el-select__wrapper.is-disabled { background-color: var(--bg-card-hover) !important; box-shadow: 0 0 0 1px var(--border) inset !important; cursor: not-allowed; }
+.el-select__wrapper.is-disabled .el-select__selected-item { color: var(--text-muted); }
+
+/* 旧结构兼容（el-select 内嵌 el-input） */
+.el-select .el-input__wrapper { background-color: var(--bg-card); }
+
+/* 多选标签 */
+.el-select__tags .el-tag {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+/* 下拉面板（popper）：其余保持 Element 原生效果，背景跟随主题（深色→深底，浅色→浅底） */
+.el-select__popper.el-popper,
+.el-select-dropdown {
+  background: var(--bg-card) !important;
+}
+.el-select__popper.el-popper .el-popper__arrow::before {
+  background: var(--bg-card) !important;
+  border-color: var(--el-border-color-light);
+}
+
+/* ============================================================
+   4. 弹窗 el-dialog（对齐 .modal：header/body/footer 分割线）
+   ============================================================ */
+.el-overlay { background-color: rgba(0, 0, 0, 0.5); }
+
+.el-dialog {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0;
+  --el-dialog-padding-primary: 0;
+}
+.el-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+/* show-close 时 EP 会把右侧 padding 压成 16px，覆盖为与左侧对称 */
+.el-dialog__header.show-close { padding-right: 20px; }
+.el-dialog__title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.el-dialog__headerbtn {
+  position: static;
+  top: auto;
+  right: auto;
+  width: 28px;
+  height: 28px;
+  margin-right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.el-dialog__headerbtn .el-dialog__close {
+  color: var(--text-muted);
+  font-size: 16px;
+}
+.el-dialog__headerbtn:hover .el-dialog__close,
+.el-dialog__headerbtn:focus .el-dialog__close { color: var(--text-primary); }
+.el-dialog__body {
+  padding: 18px 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.el-dialog__footer {
+  padding: 12px 20px 18px;
+  border-top: 1px solid var(--border);
+}
+
+/* iframe 弹窗（主框架 index.html 打开的编辑页）：body 无内边距，iframe 撑满 */
+.el-dialog.frame-dialog .el-dialog__body { padding: 0; overflow: hidden; border-radius: 0 0 var(--radius) var(--radius); }
+.el-dialog.frame-dialog .el-dialog__footer { display: none; }
+
+/* ============================================================
+   5. 确认框 el-message-box（对齐 .modal modal-sm）
+   ============================================================ */
+.el-message-box {
+  --el-messagebox-title-color: var(--text-primary);
+  --el-messagebox-content-color: var(--text-secondary);
+  width: 380px;
+  max-width: 92%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0;
+}
+.el-message-box__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: static;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.el-message-box__title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.el-message-box__headerbtn {
+  position: static;
+  top: auto;
+  right: auto;
+  width: 28px;
+  height: 28px;
+  margin-right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 16px;
+}
+.el-message-box__headerbtn .el-message-box__close { color: var(--text-muted); font-size: 16px; }
+.el-message-box__headerbtn:hover .el-message-box__close { color: var(--text-primary); }
+.el-message-box__content { padding: 18px 20px; color: var(--text-secondary); font-size: 13px; }
+.el-message-box__container { line-height: 1.6; }
+.el-message-box__message { line-height: 1.6; }
+.el-message-box__message p { line-height: 1.6; margin: 0 0 6px; }
+.el-message-box__message p:last-child { margin-bottom: 0; }
+.el-message-box__status { display: none; } /* 状态图标由标题图标替代 */
+.el-message-box__btns {
+  padding: 12px 20px 18px;
+  border-top: 1px solid var(--border);
+}
+.el-message-box__input { padding-top: 4px; }
+/* 常规确认框的状态图标颜色跟随主题 */
+.el-message-box__status.el-message-box-icon--warning { color: var(--warning); }
+.el-message-box__status.el-message-box-icon--error { color: var(--danger); }
+.el-message-box__status.el-message-box-icon--success { color: var(--success); }
+.el-message-box__status.el-message-box-icon--info { color: var(--text-secondary); }
+
+/* 删除确认弹窗（customClass: mb-del）：隐藏默认状态图标，标题前置红色警示图标块 */
+.mb-del .el-message-box__status { display: none; }
+.mb-del .el-message-box__container { padding-left: 0; }
+.mb-del .el-message-box__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mb-del .el-message-box__title::before {
+  content: "\f071";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
+}
+/* 删除确认内容中的高亮名称（对齐 .modal-body .highlight） */
+.mbx-highlight {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-family: "SF Mono", Consolas, monospace;
+}
+
+/* ============================================================
+   6. 消息提示 el-message / 通知 el-notification
+   ============================================================ */
+.el-message {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.el-message__content { color: var(--text-primary); font-size: 13px; }
+.el-message .el-message__badge { display: none; }
+
+.el-notification {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.el-notification__title { color: var(--text-primary); }
+.el-notification__content { color: var(--text-secondary); }
+
+/* ============================================================
+   7. 表单 el-form（对齐 .form-label 13px 上方/前置星号）
+   ============================================================ */
+.el-form-item__label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  padding-bottom: 6px;
+}
+.el-form-item__label-wrap { margin-left: 0 !important; }
+.el-form-item.is-required:not(.is-no-asterisk) > .el-form-item__label-wrap > .el-form-item__label::before,
+.el-form-item.is-required:not(.is-no-asterisk) > .el-form-item__label::before {
+  color: var(--danger);
+}
+.el-form-item__error {
+  color: var(--danger);
+  font-size: 11px;
+  padding-top: 2px;
+}
+.el-form-item { margin-bottom: 16px; }
+
+/* ============================================================
+   8. 开关 el-switch（对齐 .switch：40x22 / 绿色开启）
+   ============================================================ */
+.el-switch {
+  --el-switch-on-color: var(--success);
+  --el-switch-off-color: var(--border);
+  height: 22px;
+  line-height: 22px;
+}
+.el-switch__core {
+  width: 40px !important;
+  height: 22px;
+  border-radius: 22px;
+  border: none;
+  background-color: var(--border);
+}
+.el-switch.is-checked .el-switch__core { background-color: var(--success); }
+.el-switch__core .el-switch__action {
+  width: 16px;
+  height: 16px;
+  top: 3px;
+  left: 3px;
+}
+.el-switch.is-checked .el-switch__core .el-switch__action { left: calc(100% - 19px); }
+.el-switch__label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.el-switch__label.is-active { color: var(--text-primary); }
+
+/* ============================================================
+   9. 复选框 / 单选框
+   ============================================================ */
+.el-checkbox { --el-checkbox-input-border: var(--border); }
+.el-checkbox__label { color: var(--text-secondary); font-size: 13px; }
+.el-checkbox__inner {
+  background-color: var(--bg-input);
+  border-color: var(--border);
+  border-radius: 4px;
+}
+.el-checkbox__input.is-checked .el-checkbox__inner {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+.el-checkbox__input.is-checked + .el-checkbox__label { color: var(--accent); }
+.el-checkbox__inner:hover { border-color: var(--accent); }
+
+.el-radio { --el-radio-input-border: var(--border); }
+.el-radio__label { color: var(--text-secondary); font-size: 13px; }
+.el-radio__inner {
+  background-color: var(--bg-input);
+  border-color: var(--border);
+}
+.el-radio__input.is-checked .el-radio__inner {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+.el-radio__input.is-checked + .el-radio__label { color: var(--accent); }
+
+/* ============================================================
+   10. 分页 el-pagination（对齐 .pagination 按钮式）
+   ============================================================ */
+.el-pagination {
+  --el-pagination-bg-color: var(--bg-card);
+  --el-pagination-button-bg-color: var(--bg-card);
+  --el-pagination-hover-color: var(--accent);
+  padding: 16px 0;
+  justify-content: center;
+  font-size: 12px;
+  gap: 6px;
+}
+.el-pagination .el-pager li,
+.el-pagination button {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  height: 30px;
+  min-width: 30px;
+  font-size: 12px;
+  font-family: var(--font);
+  margin: 0;
+}
+.el-pagination .el-pager li + li { margin-left: 6px; }
+.el-pagination .el-pager li:hover,
+.el-pagination button:hover:enabled {
+  color: var(--accent);
+  border-color: var(--accent);
+  background-color: var(--bg-card);
+}
+.el-pagination .el-pager li.is-active {
+  background-color: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.el-pagination button:disabled { opacity: 0.4; cursor: not-allowed; color: var(--text-muted); }
+.el-pagination .el-pagination__total { color: var(--text-muted); font-size: 12px; margin-right: 8px; height: 30px; line-height: 30px; }
+.el-pagination .el-pagination__jump { color: var(--text-muted); font-size: 12px; height: 30px; line-height: 30px; }
+.el-pagination .el-select .el-select__wrapper { min-height: 30px; }
+
+/* ============================================================
+   11. 标签 el-tag（对齐 .tag：无描边 11px 圆角4）
+   ============================================================ */
+.el-tag {
+  border: none !important;
+  border-radius: 4px;
+  font-size: 11px;
+  height: 22px;
+  line-height: 20px;
+  padding: 0 8px;
+  background-color: var(--bg-card-hover);
+  color: var(--text-secondary);
+}
+.el-tag .el-tag__close { color: inherit; background: none; }
+.el-table .el-tag { height: auto; line-height: 1.5; padding: 2px 8px; }
+
+/* ============================================================
+   12. 卡片 el-card
+   ============================================================ */
+.el-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  box-shadow: none !important;
+}
+.el-card__body { padding: 0; }
+
+/* ============================================================
+   13. 表格 el-table
+   ============================================================ */
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--text-muted);
+  --el-table-text-color: var(--text-secondary);
+  --el-table-border-color: var(--border);
+  --el-table-border-color-lighter: var(--border);
+  --el-table-row-hover-bg-color: var(--bg-card-hover);
+  background-color: transparent;
+  font-size: 12px;
+}
+.el-table th.el-table__cell {
+  color: var(--text-muted);
+  font-weight: 500;
+  background-color: transparent;
+}
+.el-table td.el-table__cell { color: var(--text-secondary); }
+.el-table th.el-table__cell.is-leaf,
+.el-table td.el-table__cell { border-bottom-color: var(--border); }
+.el-table__inner-wrapper::before { background-color: var(--border); }
+.el-table__empty-text { color: var(--text-muted); }
+.el-table__body tr.hover-row > td.el-table__cell { background-color: var(--bg-card-hover); }
+
+/* ============================================================
+   14. 浮层 el-popper / 下拉菜单 el-dropdown / 气泡 el-popover
+   ============================================================ */
+.el-popper.is-light {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.el-popper.is-light .el-popper__arrow::before {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.el-dropdown-menu {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+}
+.el-dropdown-menu__item {
+  color: var(--text-secondary);
+  font-size: 13px;
+  border-radius: 6px;
+  line-height: 28px;
+  padding: 0 10px;
+}
+.el-dropdown-menu__item:not(.is-disabled):hover,
+.el-dropdown-menu__item:not(.is-disabled):focus {
+  background-color: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+.el-dropdown-menu__item--divided { border-top-color: var(--border); margin-top: 4px; padding-top: 4px; }
+.el-dropdown-menu__item--danger { color: var(--danger); }
+.el-dropdown-menu__item--danger:hover { background-color: rgba(239, 68, 68, 0.12); color: var(--danger); }
+.el-popper.sidebar-pop { padding: 6px !important; border-radius: 8px !important; }
+
+/* ============================================================
+   15. 其他：空状态 / 加载 / 滚动条
+   ============================================================ */
+.el-empty__description p { color: var(--text-muted); }
+.el-loading-mask { background-color: var(--bg-body); opacity: 0.8; }
+.el-loading-spinner .path { stroke: var(--accent); }
+.el-overlay-dialog::-webkit-scrollbar,
+.el-select-dropdown__wrap::-webkit-scrollbar,
+.el-dialog::-webkit-scrollbar { width: 6px; }
+.el-select-dropdown__wrap::-webkit-scrollbar-thumb,
+.el-dialog::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }

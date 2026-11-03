@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAF 管理系统 - 登录</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../static/css/reset.css">
+  <link rel="stylesheet" href="../static/css/common.css">
+  <link rel="stylesheet" href="../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../static/css/element-reset.css">
+  <link rel="stylesheet" href="../static/css/login.css">
+  <style>
+    /* 版本/edition 徽标（/api/system/info 驱动，接口不可用时回退静态文案） */
+    .login-footer { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+    .edition-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; line-height: 1.6; border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-card); }
+    .edition-badge.pro { border-color: rgba(139,92,246,0.45); color: #a78bfa; background: rgba(139,92,246,0.10); }
+    .login-upgrade { color: var(--accent); font-size: 12px; text-decoration: none; }
+    .login-upgrade:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <!-- 动态背景 -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow glow-1"></div>
+  <div class="bg-glow glow-2"></div>
+
+  <!-- 主题切换 -->
+  <button class="theme-btn theme-toggle" @click="toggleTheme" :title="theme==='dark' ? '切换到浅色' : '切换到深色'">
+    <el-icon :size="16"><Moon v-if="theme==='dark'"></Moon><Sunny v-else></Sunny></el-icon>
+  </button>
+
+  <!-- 登录主体 -->
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="icon"><el-icon :size="30"><Shield></Shield></el-icon></div>
+      <h1>WAF 管理系统</h1>
+      <p>Web Application Firewall</p>
+    </div>
+
+    <div class="login-card">
+      <el-form :model="form" label-position="top" @submit.prevent="onSubmit">
+        <el-form-item label="用户名">
+          <el-input :model-value="form.username" @update:model-value="v => form.username = (v || '').trim()" placeholder="请输入用户名"
+            autocomplete="username" @keyup.enter="onSubmit">
+            <template #prefix><el-icon class="input-icon" :size="15"><User></User></el-icon></template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input type="password" show-password v-model="form.password" placeholder="请输入密码"
+            autocomplete="current-password" @keyup.enter="onSubmit">
+            <template #prefix><el-icon class="input-icon" :size="15"><Lock></Lock></el-icon></template>
+          </el-input>
+        </el-form-item>
+
+        <el-form-item>
+          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+            <el-checkbox v-model="remember" class="login-remember">记住我</el-checkbox>
+            <a href="javascript:;" class="login-forgot">忘记密码？</a>
+          </div>
+        </el-form-item>
+
+        <el-button :type="'primary'" size="large" native-type="submit" class="login-btn" :loading="loading">
+          <el-icon v-if="!loading" :size="15" style="margin-right:4px;"><Right></Right></el-icon> 登 录
+        </el-button>
+      </el-form>
+    </div>
+
+    <div class="login-footer">
+      <span>{{ footerText }}</span>
+      <span v-if="info" class="edition-badge" :class="info.edition">{{ info.edition === 'pro' ? 'Pro' : '免费版' }}</span>
+      <a v-if="info && info.edition !== 'pro'" href="javascript:;" class="login-upgrade" title="升级 Pro 解锁全部能力">升级 Pro</a>
+    </div>
+  </div>
+</div>
+
+<script src="../static/js/config/theme.js"></script>
+<script src="../static/js/config/locale.js"></script>
+<script src="../static/lib/vue.min.js"></script>
+<script src="../static/lib/element-plus/index.js"></script>
+<script src="../static/lib/element-plus-icons/index.js"></script>
+<script src="../static/js/api.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      form: { username: '', password: '' },
+      remember: false,
+      showPwd: false,
+      loading: false,
+      theme: 'dark',
+      info: null
+    };
+  },
+  computed: {
+    /* 页脚文案：/api/system/info 成功后展示品牌+版本，未拉到时回退静态文案 */
+    footerText() {
+      return this.info ? (this.info.brand + ' ' + this.info.version + ' · © 2026') : 'WAF V1.0 · 单机版 © 2026';
+    }
+  },
+  mounted() {
+    ThemeManager.init();
+    this.theme = ThemeManager.getConfig().theme;
+    // 拉取品牌/版本/edition（公开接口，登录前可访问；失败时静默回退静态文案）
+    App.loadInfo().then((info) => { this.info = info; });
+  },
+  methods: {
+    toggleTheme() {
+      this.theme = ThemeManager.toggleTheme();
+    },
+    onSubmit() {
+      if (!this.form.username || !this.form.password) {
+        ElementPlus.ElMessage.warning('请填写用户名和密码');
+        return;
+      }
+      this.loading = true;
+      App.request('/api/common/login', {
+        username: this.form.username,
+        password: this.form.password
+      })
+        .then((data) => {
+          if (this.remember) {
+            // 记住我：本地留存用户名，密码仍由服务端 HttpOnly Cookie 维持会话
+            try { localStorage.setItem('waf_admin_name', this.form.username); } catch (e) {}
+          } else {
+            try { localStorage.removeItem('waf_admin_name'); } catch (e) {}
+          }
+          sessionStorage.setItem('waf_admin_name', (data && data.username) || this.form.username);
+          window.location.href = '/index.html';
+        })
+        .catch(() => {})
+        .finally(() => { this.loading = false; });
+    }
+  }
+});
+// 注册所有 Element Plus 图标
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) {
+  app.component(name, comp);
+  // in-DOM 模板会小写化标签名，注册小写别名保证图标能解析
+  app.component(name.toLowerCase(), comp);
+}
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

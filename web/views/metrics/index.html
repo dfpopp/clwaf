@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>指标分析</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    .topn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .topn-grid { grid-template-columns: 1fr; } }
+    .topn-list { display: flex; flex-direction: column; gap: 8px; }
+    .topn-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+    .topn-rank { width: 22px; height: 22px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 11px; color: var(--text-muted); background: var(--bg-input); }
+    .topn-rank.top { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .topn-main { flex: 1; min-width: 0; }
+    .topn-line1 { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 3px; }
+    .topn-key { color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topn-val { color: var(--text-secondary); flex: none; font-family: "SF Mono", Consolas, monospace; }
+    .topn-bar { height: 4px; border-radius: 2px; background: var(--bg-input); overflow: hidden; }
+    .topn-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+    .topn-bar i.danger { background: #ef4444; }
+    .chart-box { width: 100%; height: 300px; }
+    .quick-ranges { display: flex; gap: 6px; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="layout">
+    <div class="main">
+      <div class="content">
+        <div class="section-title">指标分析<span class="sub">站点流量与安全指标聚合视图（Pro 独占，复用请求维度统计）</span></div>
+
+        <!-- 筛选栏 -->
+        <div class="filter-bar">
+          <div class="filter-left">
+            <div class="filter-group">
+              <label class="filter-label"><el-icon :size="14"><component :is="'Monitor'"/></el-icon>站点</label>
+              <el-select v-model="f.site_id" placeholder="全部站点" clearable @change="load" style="width:150px;">
+                <el-option v-for="s in sites" :key="s.id" :value="s.id" :label="s.name"></el-option>
+              </el-select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label"><el-icon :size="14"><component :is="'Clock'"/></el-icon>时间范围</label>
+              <el-date-picker v-model="f.timeRange" type="datetimerange" range-separator="~" start-placeholder="开始时间" end-placeholder="结束时间"
+                value-format="YYYY-MM-DD-HH" :clearable="true" style="width:300px;" @change="onRangeChange" @clear="onRangeClear"></el-date-picker>
+            </div>
+            <div class="filter-group">
+              <div class="quick-ranges">
+                <el-button @click="setQuick(24)">近24小时</el-button>
+                <el-button @click="setQuick(168)">近7天</el-button>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <el-button @click="reset"><el-icon :size="13"><component :is="'RefreshLeft'"/></el-icon> 重置</el-button>
+            <el-button type="primary" @click="load"><el-icon :size="13"><component :is="'Search'"/></el-icon> 查询</el-button>
+          </div>
+        </div>
+
+        <!-- 指标卡 -->
+        <div class="stat-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px;">
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">总请求</span><div class="stat-icon icon-blue"><el-icon :size="14"><component :is="'DataLine'"/></el-icon></div></div>
+            <div class="stat-value">{{ fmt(summary.total_req) }}</div>
+            <div class="stat-change">所选区间请求总数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">拦截总数</span><div class="stat-icon icon-red"><el-icon :size="14"><component :is="'Warning'"/></el-icon></div></div>
+            <div class="stat-value">{{ fmt(summary.total_block) }}</div>
+            <div class="stat-change">命中防护规则并处置</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">攻击 IP</span><div class="stat-icon icon-cyan"><el-icon :size="14"><component :is="'Aim'"/></el-icon></div></div>
+            <div class="stat-value">{{ fmt(summary.attack_ip) }}</div>
+            <div class="stat-change">HLL 去重估算（±1%）</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">人机验证通过</span><div class="stat-icon icon-green"><el-icon :size="14"><component :is="'CircleCheck'"/></el-icon></div></div>
+            <div class="stat-value">{{ fmt(summary.challenge_pass) }}</div>
+            <div class="stat-change">挑战验证通过次数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top"><span class="stat-label">人机验证拦截</span><div class="stat-icon icon-orange"><el-icon :size="14"><component :is="'User'"/></el-icon></div></div>
+            <div class="stat-value">{{ fmt(summary.challenge_block) }}</div>
+            <div class="stat-change">挑战验证未通过拦截</div>
+          </div>
+        </div>
+
+        <!-- 请求/拦截趋势 -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title">请求与拦截趋势</span>
+            <span class="card-extra">按小时聚合</span>
+          </div>
+          <div class="card-body">
+            <div id="trendChart" class="chart-box"></div>
+          </div>
+        </div>
+
+        <!-- TopN 组 -->
+        <div class="topn-grid">
+          <div class="card" v-for="g in topnCards" :key="g.key">
+            <div class="card-header">
+              <span class="card-title">{{ g.title }}</span>
+              <span class="card-extra">Top {{ g.limit }}</span>
+            </div>
+            <div class="card-body">
+              <div class="topn-list" v-if="g.items.length">
+                <div class="topn-row" v-for="(it, idx) in g.items" :key="g.key + idx">
+                  <span class="topn-rank" :class="{ top: idx < 3 }">{{ idx + 1 }}</span>
+                  <div class="topn-main">
+                    <div class="topn-line1">
+                      <span class="topn-key" :title="it.key">{{ it.key || '(空)' }}</span>
+                      <span class="topn-val">{{ fmt(it.value) }}</span>
+                    </div>
+                    <div class="topn-bar"><i :class="{ danger: g.danger }" :style="{ width: barPct(it.value, g.items) }"></i></div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="empty-state"><el-icon :size="28"><component :is="'FolderOpened'"/></el-icon><div>所选区间暂无数据</div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/lib/echarts.min.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      f: { site_id: '', timeRange: [] },
+      sites: [],
+      summary: { total_req: 0, total_block: 0, attack_ip: 0, challenge_pass: 0, challenge_block: 0 },
+      trend: [],
+      blockTrend: [],
+      topnCards: [
+        { key: 'geo', title: '地域分布', limit: 20, items: [] },
+        { key: 'prov', title: '省份分布', limit: 20, items: [] },
+        { key: 'status', title: '响应状态分布', limit: 20, items: [], danger: true },
+        { key: 'top_url', title: 'Top URL', limit: 10, items: [], danger: true },
+        { key: 'top_ip', title: 'Top IP', limit: 10, items: [], danger: true },
+        { key: 'top_ua', title: 'Top UA', limit: 10, items: [] },
+        { key: 'referer', title: 'Referer 来源', limit: 10, items: [] },
+        { key: 'client', title: '客户端类型', limit: 10, items: [] }
+      ],
+      charts: {}
+    };
+  },
+  mounted() {
+    ThemeManager.init();
+    App.api.site.list(1, 100).then(({ list }) => { this.sites = list || []; }).catch(() => {});
+    this.setDefaultRange();
+    this.load();
+    window.addEventListener('resize', () => { Object.values(this.charts).forEach(c => c && c.resize && c.resize()); });
+    window.addEventListener('message', (e) => { if (e.data && e.data.action === 'theme_change') this.renderTrend(); });
+  },
+  methods: {
+    fmt(n) { return (n === null || n === undefined) ? '0' : Number(n).toLocaleString(); },
+    barPct(v, items) {
+      const max = Math.max.apply(null, items.map(x => x.value).concat([1]));
+      return Math.max(2, Math.round(v / max * 100)) + '%';
+    },
+    pad2(n) { return String(n).padStart(2, '0'); },
+    fmtHour(d) {
+      return d.getFullYear() + '-' + this.pad2(d.getMonth() + 1) + '-' + this.pad2(d.getDate()) + '-' + this.pad2(d.getHours());
+    },
+    /* 默认时间窗：近24小时（小时桶口径，与后端 YYYY-MM-DD-HH 一致） */
+    setDefaultRange() {
+      const now = new Date();
+      this.f.timeRange = [this.fmtHour(new Date(now.getTime() - 24 * 3600 * 1000)), this.fmtHour(now)];
+    },
+    setQuick(hours) {
+      const now = new Date();
+      this.f.timeRange = [this.fmtHour(new Date(now.getTime() - hours * 3600 * 1000)), this.fmtHour(now)];
+      this.load();
+    },
+    onRangeChange() {
+      if (!this.f.timeRange || this.f.timeRange.length !== 2) this.setDefaultRange();
+      this.load();
+    },
+    onRangeClear() {
+      this.setDefaultRange();
+      this.load();
+    },
+    reset() {
+      this.f = { site_id: '', timeRange: [] };
+      this.setDefaultRange();
+      this.load();
+    },
+    load() {
+      const tr = this.f.timeRange || [];
+      const p = { site_id: this.f.site_id || 0, start_hour: tr[0] || '', end_hour: tr[1] || '' };
+      App.api.metrics.get(p).then(resp => {
+        if (!resp) return;
+        this.summary = resp.summary || this.summary;
+        // 时间轴按小时升序（后端 map 无序，这里按 key 排序）
+        const byKey = (a, b) => (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0));
+        this.trend = (resp.trend || []).slice().sort(byKey);
+        this.blockTrend = (resp.block_trend || []).slice().sort(byKey);
+        const byVal = (a, b) => b.value - a.value;
+        const map = { geo: 'geo', prov: 'prov', status: 'status', top_url: 'top_url', top_ip: 'top_ip', top_ua: 'top_ua', referer: 'referer', client: 'client' };
+        this.topnCards.forEach(c => {
+          c.items = (resp[map[c.key]] || []).slice().sort(byVal);
+        });
+        this.renderTrend();
+      }).catch(() => {});
+    },
+    /* ===== 趋势图（双线：总请求/拦截） ===== */
+    getChart(id, el) {
+      if (!this.charts[id]) this.charts[id] = echarts.init(el);
+      return this.charts[id];
+    },
+    chartColors() {
+      const g = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      return {
+        tooltipBg: g('--chart-tooltip-bg'), tooltipBorder: g('--chart-tooltip-border'), tooltipText: g('--chart-tooltip-text'),
+        axisLine: g('--chart-axis-line'), splitLine: g('--chart-split-line'), axisLabel: g('--chart-axis-label'),
+        legendText: g('--chart-legend-text')
+      };
+    },
+    hourLabel(key) {
+      const p = String(key || '').split('-');
+      return p.length >= 4 ? (p[1] + '-' + p[2] + ' ' + p[3] + '时') : key;
+    },
+    renderTrend() {
+      this.$nextTick(() => {
+        const el = document.getElementById('trendChart');
+        if (!el || !window.echarts) return;
+        const chart = this.getChart('trendChart', el);
+        chart.clear();
+        const c = this.chartColors();
+        // 以后端返回的总请求小时桶为时间轴基准（拦截桶可能有缺小时，按 key 对齐补零）
+        const labels = this.trend.map(t => this.hourLabel(t.key));
+        const blockMap = {};
+        this.blockTrend.forEach(t => { blockMap[t.key] = t.value; });
+        const blockData = this.trend.map(t => blockMap[t.key] || 0);
+        if (!labels.length) {
+          chart.setOption({ graphic: { type: 'text', left: 'center', top: 'middle', style: { text: '暂无数据', fill: '#5c6b7d', fontSize: 13 } } });
+          return;
+        }
+        chart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { trigger: 'axis', backgroundColor: c.tooltipBg, borderColor: c.tooltipBorder, textStyle: { color: c.tooltipText } },
+          legend: { data: ['总请求', '拦截'], textStyle: { color: c.legendText, fontSize: 11 } },
+          grid: { left: 56, right: 20, top: 32, bottom: 24 },
+          xAxis: { type: 'category', data: labels, axisLine: { lineStyle: { color: c.axisLine } }, axisLabel: { color: c.axisLabel, fontSize: 10, interval: Math.max(0, Math.ceil(labels.length / 12) - 1) } },
+          yAxis: { type: 'value', splitLine: { lineStyle: { color: c.splitLine } }, axisLabel: { color: c.axisLabel, fontSize: 10 } },
+          series: [
+            { name: '总请求', type: 'line', smooth: true, symbol: 'none', data: this.trend.map(t => t.value), lineStyle: { width: 2, color: '#2f7bf6' }, itemStyle: { color: '#2f7bf6' } },
+            { name: '拦截', type: 'line', smooth: true, symbol: 'none', data: blockData, lineStyle: { width: 2, color: '#ef4444' }, itemStyle: { color: '#ef4444' } }
+          ]
+        });
+      });
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

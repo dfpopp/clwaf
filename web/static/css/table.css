@@ -1,0 +1,27 @@
+/* ============================================================
+   表格内容样式（跨页面共用）
+   - 表格单元格内的文本工具类、拖拽、标签配色
+   ============================================================ */
+
+/* 等宽字体 / 文本工具类 */
+.mono { font-family: "SF Mono", Consolas, monospace; color: var(--text-primary); }
+.text-primary { color: var(--text-primary); }
+.text-muted { color: var(--text-muted); }
+
+/* 表格内文本 */
+.operator-text { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
+.skip-text { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* 拖拽排序 */
+.drag-handle { cursor: grab; color: var(--text-muted); font-size: 14px; }
+.drag-handle:active { cursor: grabbing; }
+.el-table__body-wrapper tbody tr.dragging { opacity: 0.4; }
+.el-table__body-wrapper tbody tr.drag-over td { border-top: 2px solid var(--accent) !important; }
+
+/* 表格内 el-tag 配色（匹配目标/动作标签） */
+.el-tag.tag-ip { background: rgba(47,123,246,0.12) !important; color: var(--accent) !important; }
+.el-tag.tag-uri { background: rgba(34,197,94,0.12) !important; color: var(--success) !important; }
+.el-tag.tag-header { background: rgba(139,92,246,0.12) !important; color: var(--purple) !important; }
+.el-tag.tag-query { background: rgba(245,158,11,0.12) !important; color: var(--warning) !important; }
+.el-tag.tag-allow { background: rgba(34,197,94,0.12) !important; color: var(--success) !important; }
+.el-tag.tag-observe { background: rgba(245,158,11,0.12) !important; color: var(--warning) !important; }

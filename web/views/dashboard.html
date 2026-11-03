@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仪表盘</title>
+    <script>
+        (function () {
+            try {
+                var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+                document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="../static/css/reset.css">
+    <link rel="stylesheet" href="../static/css/common.css">
+    <link rel="stylesheet" href="../static/lib/element-plus/index.css">
+    <link rel="stylesheet" href="../static/lib/font-awesome/css/all.min.css">
+    <link rel="stylesheet" href="../static/css/element-reset.css">
+    <style>
+        /* 下拉框深浅色兜底（即使 element-reset 未加载也保证不显白底） */
+        .el-input__wrapper {
+            background-color: var(--bg-card) !important;
+            box-shadow: 0 0 0 1px var(--border) inset !important;
+        }
+
+        .el-input__wrapper.is-focus {
+            box-shadow: 0 0 0 1px var(--accent) inset !important;
+        }
+
+        .el-input__inner {
+            color: var(--text-primary) !important;
+        }
+
+        .el-select__wrapper {
+            background-color: var(--bg-card) !important;
+            box-shadow: 0 0 0 1px var(--border) inset !important;
+        }
+
+        .el-select__wrapper.is-focused {
+            box-shadow: 0 0 0 1px var(--accent) inset !important;
+        }
+
+        .el-select__selected-item {
+            color: var(--text-primary) !important;
+        }
+
+        .el-select__placeholder {
+            color: var(--text-muted) !important;
+        }
+
+        .stat-value .stat-unit {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-left: 2px;
+        }
+
+        .el-select__popper.el-popper, .el-select-dropdown {
+            background: var(--bg-card) !important;
+        }
+
+        .el-select-dropdown__item {
+            color: var(--text-secondary);
+        }
+
+        .el-select-dropdown__item.is-hovering {
+            background-color: var(--bg-card-hover);
+        }
+
+        .el-select-dropdown__item.is-selected {
+            color: var(--accent);
+        }
+    </style>
+    <style>
+        /* ============================================================
+           ECharts 图表主题变量
+           ============================================================ */
+        :root, [data-theme="dark"] {
+            --chart-tooltip-bg: #1a222e;
+            --chart-tooltip-border: #2a3542;
+            --chart-tooltip-text: #e6edf3;
+            --chart-axis-line: #2a3542;
+            --chart-split-line: #232c38;
+            --chart-axis-label: #5c6b7d;
+            --chart-legend-text: #8b98a9;
+            --chart-border-color: #151b24;
+            --chart-label-color: #8b98a9;
+        }
+
+        [data-theme="light"] {
+            --chart-tooltip-bg: #ffffff;
+            --chart-tooltip-border: #e2e8f0;
+            --chart-tooltip-text: #1e293b;
+            --chart-axis-line: #cbd5e1;
+            --chart-split-line: #f1f5f9;
+            --chart-axis-label: #94a3b8;
+            --chart-legend-text: #64748b;
+            --chart-border-color: #ffffff;
+            --chart-label-color: #64748b;
+        }
+
+        /* ===== 仪表盘容器 ===== */
+        html, body {
+            height: 100%;
+        }
+
+        #app {
+            height: 100%;
+        }
+
+        .dash-container {
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+            background: var(--content-gradient), var(--bg-body);
+        }
+
+        .dash-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .dash-container::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 6px;
+        }
+
+        /* ===== 筛选栏 ===== */
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .filter-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .filter-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-label i {
+            color: var(--accent);
+            line-height: 1;
+        }
+
+        /* ===== 区块标题 ===== */
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            margin: 24px 0 14px;
+            color: var(--text-primary);
+        }
+
+        .section-title::before {
+            content: "";
+            width: 3px;
+            height: 16px;
+            border-radius: 3px;
+            background: var(--accent);
+        }
+
+        .section-title .sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-left: 4px;
+        }
+
+        /* ===== 统计卡片 ===== */
+        .stat-grid-5 {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .stat-grid-4c {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-light);
+        }
+
+        .stat-card .stat-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .stat-card .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .stat-card .stat-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            margin: 8px 0 2px;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .stat-card .stat-change {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .icon-blue {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .icon-green {
+            background: rgba(34, 197, 94, 0.12);
+            color: var(--success);
+        }
+
+        .icon-red {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+        }
+
+        .icon-orange {
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--warning);
+        }
+
+        .icon-purple {
+            background: rgba(139, 92, 246, 0.12);
+            color: var(--purple);
+        }
+
+        .icon-cyan {
+            background: rgba(6, 182, 212, 0.12);
+            color: var(--cyan);
+        }
+
+        .icon-pink {
+            background: rgba(236, 72, 153, 0.12);
+            color: var(--pink);
+        }
+
+        /* ===== 授权到期提醒横幅（Pro：临期黄 / 宽限期橙 / 过期红） ===== */
+        .lic-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            line-height: 1.6;
+            border: 1px solid;
+        }
+
+        .lic-banner i {
+            flex-shrink: 0;
+            font-size: 15px;
+        }
+
+        .lic-banner a.lic-act {
+            margin-left: auto;
+            flex-shrink: 0;
+            font-size: 12px;
+            text-decoration: none;
+            white-space: nowrap;
+            border-bottom: 1px dashed currentColor;
+            padding-bottom: 1px;
+            transition: opacity 0.15s;
+            cursor: pointer;
+        }
+
+        .lic-banner a.lic-act:hover {
+            opacity: 0.75;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .lic-banner.lic-warn {
+            background: rgba(245, 158, 11, 0.10);
+            border-color: rgba(245, 158, 11, 0.35);
+            color: #fbbf24;
+        }
+
+        .lic-banner.lic-grace {
+            background: rgba(249, 115, 22, 0.12);
+            border-color: rgba(249, 115, 22, 0.40);
+            color: #fb923c;
+        }
+
+        .lic-banner.lic-danger {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.45);
+            color: #f87171;
+        }
+
+        /* ===== 地理地图区 ===== */
+        .geo-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+            align-items: start;
+        }
+
+        .geo-left {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 0;
+        }
+
+        .geo-body {
+            display: flex;
+            padding: 16px;
+            gap: 16px;
+        }
+
+        .geo-map {
+            flex: 1;
+            min-width: 0;
+            height: 460px;
+        }
+
+        .geo-toggle {
+            display: inline-flex;
+            background: var(--bg-body);
+            border-radius: 6px;
+            padding: 2px;
+            gap: 2px;
+        }
+
+        .geo-toggle a {
+            padding: 2px 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .geo-toggle a:hover {
+            color: var(--accent);
+        }
+
+        .geo-toggle a.on {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .geo-rank {
+            width: 280px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .geo-rank-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding: 4px 0 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .geo-rank-title .total {
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .rank-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .rank-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+        }
+
+        .rank-no {
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            background: var(--bg-body);
+            color: var(--text-secondary);
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .rank-no.top1 {
+            background: linear-gradient(135deg, #f59e0b, #fbbf24);
+            color: #fff;
+        }
+
+        .rank-no.top2 {
+            background: linear-gradient(135deg, #94a3b8, #cbd5e1);
+            color: #fff;
+        }
+
+        .rank-no.top3 {
+            background: linear-gradient(135deg, #b45309, #d97706);
+            color: #fff;
+        }
+
+        .rank-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .rank-name {
+            font-size: 13px;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .rank-name .num {
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .rank-bar {
+            height: 5px;
+            background: var(--bg-body);
+            border-radius: 3px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        .rank-bar .fill {
+            height: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg, var(--accent), #5b5ef0);
+            transition: width 0.5s ease;
+        }
+
+        .rank-name .rt {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 8px;
+        }
+
+        /* ===== 请求排行（位于地图下方，左列内横向三卡） ===== */
+        .toprank-section {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .toprank-body {
+            padding: 12px 20px 18px;
+        }
+
+        .toprank-body .rank-list {
+            overflow: visible;
+        }
+
+        /* ===== 折线图区 ===== */
+        .trend-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .trend-box {
+            width: 100%;
+            height: 210px;
+        }
+
+        /* ===== 底部卡片 ===== */
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .mini-chart {
+            width: 100%;
+            height: 200px;
+        }
+
+        /* ===== 表格内文字 ===== */
+        .mono {
+            font-family: "SF Mono", Consolas, monospace;
+            color: var(--text-primary);
+        }
+
+        /* ===== 暂无数据占位 ===== */
+        .no-data {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 13px;
+            height: 100%;
+            min-height: 160px;
+        }
+
+        .no-data i {
+            font-size: 32px;
+            opacity: 0.4;
+        }
+
+        /* ============================================================
+           Element Plus 组件深色主题覆盖（变量驱动，深/浅色自适应）
+           ============================================================ */
+
+        /* el-card */
+        .el-card {
+            background-color: var(--bg-card);
+            border-color: var(--border);
+            color: var(--text-primary);
+            border-radius: var(--radius) !important;
+        }
+
+        .el-card__header {
+            border-bottom-color: var(--border);
+            padding: 14px 20px;
+        }
+
+        .el-card__body {
+            padding: 0;
+        }
+
+        .el-card.is-always-shadow {
+            box-shadow: none;
+        }
+
+        /* el-table */
+        .el-table {
+            --el-table-bg-color: transparent;
+            --el-table-tr-bg-color: transparent;
+            --el-table-header-bg-color: transparent;
+            --el-table-border-color: var(--border);
+            --el-table-text-color: var(--text-secondary);
+            --el-table-header-text-color: var(--text-muted);
+            --el-table-row-hover-bg-color: var(--bg-card-hover);
+            --el-table-border-color-lighter: var(--border);
+            background-color: transparent;
+        }
+
+        .el-table th.el-table__cell {
+            color: var(--text-muted);
+            font-weight: 500;
+            background-color: transparent;
+        }
+
+        .el-table td.el-table__cell {
+            color: var(--text-secondary);
+        }
+
+        .el-table__inner-wrapper::before {
+            background-color: var(--border);
+        }
+
+        .el-table__empty-text {
+            color: var(--text-muted);
+        }
+
+        /* el-select */
+        .el-select {
+            --el-component-size: 35px;
+        }
+
+        .el-select .el-input__wrapper {
+            background-color: transparent;
+            box-shadow: 0 0 0 1px var(--border) inset;
+        }
+
+        .el-select .el-input__wrapper:hover {
+            box-shadow: 0 0 0 1px var(--accent) inset;
+        }
+
+        .el-select .el-input__inner {
+            color: var(--text-primary);
+        }
+
+        /* el-radio-button（tab 风格） */
+        .tabs-group {
+            display: inline-flex;
+            gap: 4px;
+            background: var(--bg-body);
+            padding: 3px;
+            border-radius: 8px;
+        }
+
+        .tabs-group .el-radio-button {
+            margin: 0;
+        }
+
+        .tabs-group .el-radio-button__inner {
+            border: none !important;
+            border-radius: 6px !important;
+            padding: 5px 14px !important;
+            font-size: 12px !important;
+            background: transparent !important;
+            color: var(--text-secondary) !important;
+            box-shadow: none !important;
+            height: auto;
+            line-height: 1.4;
+        }
+
+        .tabs-group .el-radio-button__inner:hover {
+            color: var(--text-primary) !important;
+        }
+
+        .tabs-group .el-radio-button__original-radio:checked + .el-radio-button__inner {
+            background-color: var(--accent) !important;
+            color: #fff !important;
+        }
+
+        /* el-tag 自定义配色 */
+        .el-tag.waf-tag {
+            border: none !important;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            height: auto;
+            line-height: 1.4;
+        }
+
+        .el-tag.waf-tag-custom {
+            background-color: rgba(47, 123, 246, 0.12) !important;
+            color: #60a5fa !important;
+        }
+
+        .el-tag.waf-tag-cc {
+            background-color: rgba(139, 92, 246, 0.12) !important;
+            color: #a78bfa !important;
+        }
+
+        .el-tag.waf-tag-challenge {
+            background-color: rgba(245, 158, 11, 0.12) !important;
+            color: #fbbf24 !important;
+        }
+
+        .el-tag.waf-tag-waiting_room {
+            background-color: rgba(6, 182, 212, 0.12) !important;
+            color: #22d3ee !important;
+        }
+
+        .el-tag.waf-tag-other {
+            background-color: rgba(100, 116, 139, 0.15) !important;
+            color: #94a3b8 !important;
+        }
+
+        .el-tag.waf-action-block {
+            background-color: rgba(239, 68, 68, 0.12) !important;
+            color: #f87171 !important;
+            border: none !important;
+        }
+
+        .el-tag.waf-action-observe {
+            background-color: rgba(245, 158, 11, 0.12) !important;
+            color: #fbbf24 !important;
+            border: none !important;
+        }
+
+        /* el-popper（下拉/提示） */
+        .el-popper {
+            background-color: var(--bg-card) !important;
+            border-color: var(--border) !important;
+        }
+
+        .el-popper .el-select-dropdown__item {
+            color: var(--text-secondary);
+        }
+
+        .el-popper .el-select-dropdown__item.hover, .el-popper .el-select-dropdown__item:hover {
+            background-color: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        .el-popper .el-select-dropdown__item.is-selected {
+            color: var(--accent);
+        }
+
+        /* 响应式 */
+        @media (max-width: 1600px) {
+            .stat-grid-6 .el-col {
+                width: 33.33%;
+            }
+        }
+
+        @media (max-width: 1600px) {
+            .stat-grid-4 .el-col {
+                width: 50%;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .geo-section {
+                grid-template-columns: 1fr;
+            }
+
+            .toprank-section {
+                grid-template-columns: 1fr;
+            }
+
+            .bottom-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .geo-body {
+                flex-direction: column;
+            }
+
+            .geo-rank {
+                width: 100%;
+            }
+
+            .stat-grid-6 .el-col {
+                width: 50%;
+            }
+
+            .stat-grid-5 {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 900px) {
+            .stat-grid-5, .stat-grid-4c {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dash-container {
+                padding: 14px;
+            }
+
+            .bottom-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .geo-map {
+                height: 320px;
+            }
+
+            .stat-grid-6 .el-col, .stat-grid-4 .el-col {
+                width: 100% !important;
+            }
+
+            .stat-grid-5, .stat-grid-4c {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="app" v-cloak>
+    <div class="dash-container">
+        <!-- ===== 授权到期提醒（Pro 版：临期≤7天 黄 / 宽限期 橙 / 过期停防护 红） ===== -->
+        <div v-if="licBanner" class="lic-banner" :class="'lic-' + licBanner.cls">
+            <i class="fa-solid" :class="licBanner.icon"></i>
+            <span>{{ licBanner.text }}</span>
+            <a class="lic-act" @click="goLicense" title="前往授权管理">前往 系统配置 → 授权管理 →</a>
+        </div>
+        <!-- ===== 筛选栏 ===== -->
+        <div class="filter-bar">
+            <div class="filter-left">
+                <span class="filter-label"><i class="fa-solid fa-filter"></i> 防护应用</span>
+                <el-select v-model="currentSiteId" style="width: 240px;" @change="onSiteChange">
+                    <el-option label="全部应用" :value="'all'"></el-option>
+                    <el-option v-for="site in siteList" :key="site.id" :label="site.name + ' ' + site.domain"
+                               :value="String(site.id)"></el-option>
+                </el-select>
+            </div>
+            <div class="filter-left">
+                <span class="filter-label"><i class="fa-solid fa-clock"></i> 时间范围</span>
+                <el-radio-group v-model="currentTimeRange" size="small" class="tabs-group" @change="onTimeRangeChange">
+                    <el-radio-button :value="'24h'">近24小时</el-radio-button>
+                    <el-radio-button :value="'7d'">近7天</el-radio-button>
+                    <el-radio-button :value="'30d'">近30天</el-radio-button>
+                </el-radio-group>
+            </div>
+        </div>
+
+        <!-- ===== 流量分析 KPI ===== -->
+        <div class="section-title">流量分析<span class="sub">Traffic Analysis</span></div>
+        <div class="stat-grid-4c">
+            <div class="stat-card" v-for="card in trafficCards" :key="card.key">
+                <div class="stat-top">
+                    <span class="stat-label">{{ card.label }}</span>
+                    <span class="stat-icon" :class="card.iconClass"><i :class="'fa-solid ' + card.icon"></i></span>
+                </div>
+                <div class="stat-value">{{ fmt(stats[card.key]) }}<span v-if="card.unit" class="stat-unit">{{ card.unit }}</span>
+                </div>
+                <div class="stat-change">{{ card.change }}</div>
+            </div>
+        </div>
+
+        <!-- ===== 安全防护 KPI ===== -->
+        <div class="section-title">安全防护<span class="sub">Security</span></div>
+        <div class="stat-grid-5">
+            <div class="stat-card" v-for="card in securityCards" :key="card.key">
+                <div class="stat-top">
+                    <span class="stat-label">{{ card.label }}</span>
+                    <span class="stat-icon" :class="card.iconClass"><i :class="'fa-solid ' + card.icon"></i></span>
+                </div>
+                <div class="stat-value">{{ fmt(stats[card.key]) }}<span v-if="card.unit" class="stat-unit">{{ card.unit }}</span>
+                </div>
+                <div class="stat-change">{{ statChange(card) }}</div>
+            </div>
+        </div>
+
+        <!-- ===== HTTP 状态指标 ===== -->
+        <div class="section-title">HTTP 状态分析<span class="sub">Status Code</span></div>
+        <el-row :gutter="12" class="stat-grid-4">
+            <el-col v-for="card in httpStatusCards" :key="card.key" :xs="24" :sm="12" :lg="6">
+                <div class="stat-card">
+                    <div class="stat-top">
+                        <span class="stat-label">{{ card.label }}</span>
+                        <span class="stat-icon" :class="card.iconClass"><i :class="'fa-solid ' + card.icon"></i></span>
+                    </div>
+                    <div class="stat-value">{{ fmt(stats[card.key]) }}<span v-if="card.unit" class="stat-unit">{{ card.unit }}</span>
+                    </div>
+                    <div class="stat-change">{{ card.change }}</div>
+                </div>
+            </el-col>
+        </el-row>
+
+        <!-- ===== 地理位置分布 ===== -->
+        <div class="section-title">地理位置分布<span class="sub">Geo Distribution</span></div>
+        <div class="geo-section">
+            <div class="geo-left">
+                <el-card shadow="never">
+                    <template #header>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:14px;font-weight:600;">{{ geoType === 'visit' ? '访问' : '拦截' }}来源地域</span>
+                            <span style="display:flex;align-items:center;gap:10px;">
+              <span class="geo-toggle">
+                <a :class="geoType === 'visit' ? 'on' : ''" @click="setGeoType('visit')">访问</a>
+                <a :class="geoType === 'block' ? 'on' : ''" @click="setGeoType('block')">拦截</a>
+              </span>
+              <span class="geo-toggle">
+                <a :class="geoScope === 'cn' ? 'on' : ''" @click="setGeo('cn')">国内</a>
+                <a :class="geoScope === 'world' ? 'on' : ''" @click="setGeo('world')">全球</a>
+              </span>
+              <span style="font-size:12px;color:var(--text-muted);">合计 {{ fmt(geoTotal) }}</span>
+            </span>
+                        </div>
+                    </template>
+                    <div class="geo-body">
+                        <div class="geo-map" ref="geoChart"></div>
+                        <div class="geo-rank">
+                            <div class="geo-rank-title">地域 TOP 10<span class="total">合计：{{ fmt(geoTotal) }}</span>
+                            </div>
+                            <div class="rank-list" v-if="geoRank.length">
+                                <div class="rank-item" v-for="(g, i) in geoRank" :key="i">
+                                    <span class="rank-no" :class="['top1', 'top2', 'top3'][i] || ''">{{ i + 1 }}</span>
+                                    <div class="rank-info">
+                                        <div class="rank-name"><span class="rt">{{ g.name }}</span><span class="num">{{ fmt(g.count) }} · {{ g.pct }}%</span>
+                                        </div>
+                                        <div class="rank-bar">
+                                            <div class="fill" :style="{ width: Math.min(g.pct, 100) + '%' }"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="no-data" v-else style="min-height:120px;"><span>暂无数据</span></div>
+                        </div>
+                    </div>
+                </el-card>
+                <div class="toprank-section">
+                    <el-card shadow="never">
+                        <template #header>
+                            <div style="display:flex;align-items:center;justify-content:space-between;">
+                                <span style="font-size:14px;font-weight:600;">请求IP排行</span>
+                                <span style="font-size:12px;color:var(--text-muted);">TOP 5</span>
+                            </div>
+                        </template>
+                        <div class="toprank-body">
+                            <div class="rank-list" v-if="requestRanks.ip.length">
+                                <div class="rank-item" v-for="(g, i) in requestRanks.ip" :key="i">
+                                    <span class="rank-no" :class="['top1', 'top2', 'top3'][i] || ''">{{ i + 1 }}</span>
+                                    <div class="rank-info">
+                                        <div class="rank-name"><span class="rt" :title="g.name">{{ g.name }}</span><span
+                                                class="num">{{ fmt(g.count) }} · {{ g.pct }}%</span></div>
+                                        <div class="rank-bar">
+                                            <div class="fill" :style="{ width: Math.min(g.pct, 100) + '%' }"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="no-data" v-else><span>暂无数据</span></div>
+                        </div>
+                    </el-card>
+                    <el-card shadow="never">
+                        <template #header>
+                            <div style="display:flex;align-items:center;justify-content:space-between;">
+                                <span style="font-size:14px;font-weight:600;">请求链接排行</span>
+                                <span style="font-size:12px;color:var(--text-muted);">TOP 5</span>
+                            </div>
+                        </template>
+                        <div class="toprank-body">
+                            <div class="rank-list" v-if="requestRanks.url.length">
+                                <div class="rank-item" v-for="(g, i) in requestRanks.url" :key="i">
+                                    <span class="rank-no" :class="['top1', 'top2', 'top3'][i] || ''">{{ i + 1 }}</span>
+                                    <div class="rank-info">
+                                        <div class="rank-name"><span class="rt" :title="g.name">{{ g.name }}</span><span
+                                                class="num">{{ fmt(g.count) }} · {{ g.pct }}%</span></div>
+                                        <div class="rank-bar">
+                                            <div class="fill" :style="{ width: Math.min(g.pct, 100) + '%' }"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="no-data" v-else><span>暂无数据</span></div>
+                        </div>
+                    </el-card>
+                    <el-card shadow="never">
+                        <template #header>
+                            <div style="display:flex;align-items:center;justify-content:space-between;">
+                                <span style="font-size:14px;font-weight:600;">请求UA排行</span>
+                                <span style="font-size:12px;color:var(--text-muted);">TOP 5</span>
+                            </div>
+                        </template>
+                        <div class="toprank-body">
+                            <div class="rank-list" v-if="requestRanks.ua.length">
+                                <div class="rank-item" v-for="(g, i) in requestRanks.ua" :key="i">
+                                    <span class="rank-no" :class="['top1', 'top2', 'top3'][i] || ''">{{ i + 1 }}</span>
+                                    <div class="rank-info">
+                                        <div class="rank-name"><span class="rt" :title="g.name">{{ g.name }}</span><span
+                                                class="num">{{ fmt(g.count) }} · {{ g.pct }}%</span></div>
+                                        <div class="rank-bar">
+                                            <div class="fill" :style="{ width: Math.min(g.pct, 100) + '%' }"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </el-card>
+                </div>
+            </div><!-- /geo-left -->
+            <div class="trend-stack">
+                <el-card shadow="never">
+                    <template #header>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:14px;font-weight:600;">QPS 实时吞吐</span>
+                            <span style="font-size:12px;color:var(--text-muted);">峰值 <b>{{ fmt(qps.peak) }}</b> req/s</span>
+                        </div>
+                    </template>
+                    <div style="padding:16px 20px;">
+                        <div class="trend-box" ref="qpsChart"></div>
+                    </div>
+                </el-card>
+                <el-card shadow="never">
+                    <template #header>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:14px;font-weight:600;">访问情况</span>
+                            <span style="font-size:12px;color:var(--text-muted);">10分钟粒度</span>
+                        </div>
+                    </template>
+                    <div style="padding:16px 20px;">
+                        <div class="trend-box" ref="visitChart"></div>
+                    </div>
+                </el-card>
+                <el-card shadow="never">
+                    <template #header>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:14px;font-weight:600;">拦截情况</span>
+                            <span style="font-size:12px;color:var(--text-muted);">10分钟粒度</span>
+                        </div>
+                    </template>
+                    <div style="padding:16px 20px;">
+                        <div class="trend-box" ref="blockChart"></div>
+                    </div>
+                </el-card>
+            </div>
+        </div>
+
+        <!-- ===== 访问分析 ===== -->
+        <div class="section-title">访问分析<span class="sub">Access Analysis</span></div>
+        <div class="bottom-grid">
+            <el-card shadow="never">
+                <template #header>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <span style="font-size:14px;font-weight:600;">客户端</span>
+                        <span style="font-size:12px;color:var(--text-muted);">UA 分析</span>
+                    </div>
+                </template>
+                <div class="mini-chart" ref="clientChart" style="height:180px;"></div>
+            </el-card>
+            <el-card shadow="never">
+                <template #header>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <span style="font-size:14px;font-weight:600;">响应状态</span>
+                        <span style="font-size:12px;color:var(--text-muted);">HTTP Status</span>
+                    </div>
+                </template>
+                <div class="mini-chart" ref="statusChart" style="height:180px;"></div>
+            </el-card>
+            <el-card shadow="never">
+                <template #header>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <span style="font-size:14px;font-weight:600;">外部来源域名</span>
+                        <span style="font-size:12px;color:var(--text-muted);">Referer</span>
+                    </div>
+                </template>
+                <div class="mini-chart" ref="refererChart" style="height:180px;"></div>
+            </el-card>
+            <el-card shadow="never">
+                <template #header>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <span style="font-size:14px;font-weight:600;">受访问域名</span>
+                        <span style="font-size:12px;color:var(--text-muted);">Host</span>
+                    </div>
+                </template>
+                <div class="mini-chart" ref="hostChart" style="height:180px;"></div>
+            </el-card>
+        </div>
+
+        <!-- ===== 安全态势 ===== -->
+        <div class="section-title">安全态势<span class="sub">Security Posture</span></div>
+        <el-row :gutter="16">
+            <el-col :xs="24" :lg="16">
+                <el-card shadow="never">
+                    <template #header>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:14px;font-weight:600;">最近攻击日志</span>
+                            <a href="attack_log/index.html"
+                               style="color:var(--accent);text-decoration:none;font-size:12px;">查看全部</a>
+                        </div>
+                    </template>
+                    <el-table :data="attackLogList" size="small" style="width:100%" empty-text="暂无攻击记录">
+                        <el-table-column label="时间" width="120">
+                            <template #default="{ row }"><span
+                                    style="color:var(--text-muted);">{{ row.create_time }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="站点" min-width="130">
+                            <template #default="{ row }">{{ row.site_name || '-' }}</template>
+                        </el-table-column>
+                        <el-table-column label="攻击类型" min-width="110">
+                            <template #default="{ row }">
+                                <el-tag size="small" effect="plain"
+                                        :class="'waf-tag waf-tag-' + attackTag(row.attack_type)">{{
+                                    attackLabel(row.attack_type) }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="IP" min-width="130">
+                            <template #default="{ row }"><span class="mono">{{ row.client_ip }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="动作" min-width="100">
+                            <template #default="{ row }">
+                                <el-tag size="small" effect="plain"
+                                        :class="'waf-action-' + (row.action === 'block' ? 'block' : 'observe')">{{
+                                    actionLabel(row.action) }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </el-card>
+            </el-col>
+            <el-col :xs="24" :lg="8">
+                <el-card shadow="never">
+                    <template #header>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:14px;font-weight:600;">攻击类型分布</span>
+                            <span style="font-size:12px;color:var(--text-muted);">近{{ rangeLabel }}</span>
+                        </div>
+                    </template>
+                    <div style="padding:16px 20px;">
+                        <div class="mini-chart" ref="typeChart" style="height:260px;"></div>
+                    </div>
+                </el-card>
+            </el-col>
+        </el-row>
+    </div>
+</div>
+
+<script src="../static/js/config/theme.js"></script>
+<script src="../static/js/config/locale.js"></script>
+<script src="../static/lib/vue.min.js"></script>
+<script src="../static/lib/element-plus/index.js"></script>
+<script src="../static/lib/element-plus-icons/index.js"></script>
+<script src="../static/lib/echarts.min.js"></script>
+<script src="../static/js/api.js"></script>
+<script src="../static/js/ui.js"></script>
+<script src="../static/js/common.js"></script>
+<script>
+    const {createApp} = Vue;
+    // 地图 GeoJSON 本地缓存 key 前缀（v4：2026-09-01 二次精简，china 147KB / world 201KB，强制失效旧缓存）
+    const GEO_CACHE_KEY = 'waf_geo_v5_';
+    // 国内地图的 34 个省级行政区全称（简称→全称映射）。地图柱状数据仅允许这些省份参与渲染，
+    // 过滤掉 ip2region 对海外 IP 解析出的州/区域名（如 Virginia、美国各州名等），避免污染中国省份地图。
+    const CHINA_PROVINCE_FULL = {
+        '北京': '北京市', '天津': '天津市', '上海': '上海市', '重庆': '重庆市',
+        '河北': '河北省', '山西': '山西省', '辽宁': '辽宁省', '吉林': '吉林省', '黑龙江': '黑龙江省',
+        '江苏': '江苏省', '浙江': '浙江省', '安徽': '安徽省', '福建': '福建省', '江西': '江西省',
+        '山东': '山东省', '河南': '河南省', '湖北': '湖北省', '湖南': '湖南省', '广东': '广东省',
+        '海南': '海南省', '四川': '四川省', '贵州': '贵州省', '云南': '云南省', '陕西': '陕西省',
+        '甘肃': '甘肃省', '青海': '青海省', '台湾': '台湾省',
+        '内蒙古': '内蒙古自治区', '广西': '广西壮族自治区', '西藏': '西藏自治区',
+        '宁夏': '宁夏回族自治区', '新疆': '新疆维吾尔自治区',
+        '香港': '香港特别行政区', '澳门': '澳门特别行政区'
+    };
+    const CHINA_PROVINCE_SET = new Set(Object.values(CHINA_PROVINCE_FULL));
+    // 若 ip2region 直接返回的是全称则已是集合成员；此对象便于统一校验
+    const app = createApp({
+        data() {
+            return {
+                currentSiteId: 'all',
+                currentTimeRange: '24h',
+                siteList: [],
+                licBanner: null, // 授权到期提醒（Pro 版三色：临期/宽限/过期）
+                attackLogList: [],
+                stats: {
+                    total_requests: 0, total_blocked: 0, total_uv: 0, total_sites: 0,
+                    today_requests: 0, today_blocked: 0,
+                    cc_blocked: 0, challenge_blocked: 0, js_challenge_blocked: 0, attack_ips: 0,
+                    pv: 0, page_count: 0, ip: 0, uv: 0, challenge_passed: 0, attack_ips_daily: 0,
+                    zsec_inject: 0, zsec_submit: 0, zsec_pass: 0, zsec_upgrade: 0, zsec_silent: 0,
+                    err4xx: 0, err4xxRate: 0, err5xx: 0, err5xxRate: 0,
+                    trend: [], site_stats: [], attack_type_dist: []
+                },
+                dim: {
+                    geo_country: [], geo_province: [], geo_country_block: [], geo_province_block: [],
+                    status_dist: [], client_top: [], referer_top: [], host_top: [],
+                    ip_top: [], url_top: [], ua_top: []
+                },
+                qps: {points: [], peak: 0}, // 秒级 QPS 实时（最近10分钟）
+                minute: {req_points: [], block_points: []}, // 10 分钟粒度访问/拦截
+                geoScope: 'cn',
+                geoType: 'visit',
+                charts: {},
+                // 卡片数必须等于所在栅格的列数，否则末行会留出空洞（流量组 4 个配 stat-grid-4c，安全组 5 个配 stat-grid-5）
+                // 流量分析＝纯访问量；安全防护＝拦截与攻击（含总拦截，便于与细分项对照）
+                trafficCards: [
+                    {
+                        key: 'total_requests',
+                        label: '请求次数',
+                        icon: 'fa-arrow-right-arrow-left',
+                        iconClass: 'icon-blue',
+                        change: '实时累计'
+                    },
+                    {
+                        key: 'page_count',
+                        label: '页面请求量',
+                        icon: 'fa-file-lines',
+                        iconClass: 'icon-blue',
+                        change: '200 且 HTML 页面'
+                    },
+                    {
+                        key: 'uv',
+                        label: 'UV 独立访客',
+                        icon: 'fa-user-group',
+                        iconClass: 'icon-green',
+                        change: 'IP+UA 去重'
+                    },
+                    {key: 'ip', label: '独立 IP', icon: 'fa-globe', iconClass: 'icon-purple', change: '去重统计'},
+                ],
+                // 注意：JS 挑战/滑块/拼图/验证码都属于人机验证，不单列指标（失败补记的 attack_type 统一为 challenge）
+                securityCards: [
+                    {
+                        key: 'total_blocked',
+                        label: '拦截次数',
+                        icon: 'fa-shield-halved',
+                        iconClass: 'icon-red',
+                        change: '全部类型拦截合计'
+                    },
+                    {
+                        key: 'cc_blocked',
+                        label: 'CC 拦截数',
+                        icon: 'fa-bolt',
+                        iconClass: 'icon-orange',
+                        change: 'CC 攻击拦截'
+                    },
+                    {key: 'attack_ips', label: '攻击 IP', icon: 'fa-bug', iconClass: 'icon-orange', change: '去重统计'},
+                    {
+                        key: 'challenge_passed',
+                        label: '人机验证放行数',
+                        icon: 'fa-user-check',
+                        iconClass: 'icon-green',
+                        change: '验证通过放行'
+                    },
+                    {
+                        key: 'challenge_blocked',
+                        label: '人机验证拦截数',
+                        icon: 'fa-user-xmark',
+                        iconClass: 'icon-red',
+                        change: '验证失败拦截'
+                    },
+                    // 0s 指标行（M6 统计口径：注入/提交/通过/升级/沉默；恰好补满 stat-grid-5 一行，
+                    // 站点未开启 0 秒挑战档时恒为 0）
+                    {
+                        key: 'zsec_inject',
+                        label: '0s 注入数',
+                        icon: 'fa-syringe',
+                        iconClass: 'icon-blue',
+                        change: 'nonce 签发·按页面请求计，含未回传爬虫'
+                    },
+                    {
+                        key: 'zsec_submit',
+                        label: '0s 提交数',
+                        icon: 'fa-paper-plane',
+                        iconClass: 'icon-blue',
+                        change: '评分包到达'
+                    },
+                    {
+                        key: 'zsec_pass',
+                        label: '0s 通过数',
+                        icon: 'fa-circle-check',
+                        iconClass: 'icon-green',
+                        change: '评分达标发凭证'
+                    },
+                    {
+                        key: 'zsec_upgrade',
+                        label: '0s 升级数',
+                        icon: 'fa-arrow-up-right-dots',
+                        iconClass: 'icon-orange',
+                        change: '评分未达标转 1s 挑战'
+                    },
+                    {
+                        key: 'zsec_silent',
+                        label: '0s 沉默数',
+                        icon: 'fa-bell-slash',
+                        iconClass: 'icon-red',
+                        change: '回头请求才判定零回传，拉一次就走的不计'
+                    },
+                ],
+                httpStatusCards: [
+                    {
+                        key: 'err4xx',
+                        label: '4xx 错误数',
+                        icon: 'fa-circle-exclamation',
+                        iconClass: 'icon-orange',
+                        change: '源站响应'
+                    },
+                    {
+                        key: 'err4xxRate',
+                        label: '4xx 错误率',
+                        icon: 'fa-percent',
+                        iconClass: 'icon-orange',
+                        change: '占比',
+                        unit: '%'
+                    },
+                    {
+                        key: 'err5xx',
+                        label: '5xx 错误数',
+                        icon: 'fa-triangle-exclamation',
+                        iconClass: 'icon-pink',
+                        change: '源站响应'
+                    },
+                    {
+                        key: 'err5xxRate',
+                        label: '5xx 错误率',
+                        icon: 'fa-chart-line',
+                        iconClass: 'icon-pink',
+                        change: '占比',
+                        unit: '%'
+                    },
+                ],
+            };
+        },
+        computed: {
+            rangeLabel() {
+                return {'24h': '近24小时', '7d': '近7天', '30d': '近30天'}[this.currentTimeRange] || '';
+            },
+            /* 地域合计：按当前地图范围，国内=省份，全球=国家 */
+            geoTotal() {
+                return this.geoSource().reduce((a, x) => a + (Number(x.count) || 0), 0);
+            },
+            geoRank() {
+                const src = this.geoSource();
+                const total = src.reduce((a, x) => a + (Number(x.count) || 0), 0) || 1;
+                return src.slice(0, 10).map(x => {
+                    const c = Number(x.count) || 0;
+                    return {name: x.dim_key || '-', count: c, pct: Math.round(c / total * 1000) / 10};
+                });
+            },
+            /* 请求排行：IP/URL/UA 各 Top5（各维度独立计数，各自算占比） */
+            requestRanks() {
+                const build = (arr) => {
+                    const src = arr || [];
+                    const total = src.reduce((a, x) => a + (Number(x.count) || 0), 0) || 1;
+                    return src.map(x => {
+                        const c = Number(x.count) || 0;
+                        return {name: x.dim_key || '-', count: c, pct: Math.round(c / total * 1000) / 10};
+                    });
+                };
+                return {ip: build(this.dim.ip_top), url: build(this.dim.url_top), ua: build(this.dim.ua_top)};
+            }
+        },
+        mounted() {
+            ThemeManager.init();
+            this.loadSites();
+            this.load();
+            this.loadLicBanner();
+            // 实时三卡每 30 秒自动刷新（独立于顶部时间范围）
+            this._realtimeTimer = setInterval(() => {
+                this.loadRealTime();
+            }, 30000);
+            window.addEventListener('resize', this.resizeCharts);
+            window.addEventListener('message', (e) => {
+                if (e.data && e.data.action === 'theme_change') requestAnimationFrame(() => requestAnimationFrame(() => this.renderCharts()));
+            });
+        },
+        beforeUnmount() {
+            if (this._realtimeTimer) {
+                clearInterval(this._realtimeTimer);
+                this._realtimeTimer = null;
+            }
+            window.removeEventListener('resize', this.resizeCharts);
+            Object.values(this.charts).forEach(ch => ch && ch.dispose());
+        },
+        methods: {
+            /* 授权到期提醒（Pro 版）：读取 /api/system/info 三态与剩余天数
+               规则：过期(state=3) 红 → 宽限期(state=2) 橙 → 临期 state=1 且 days_left<=7 黄；免费版不展示
+               链接机制与侧边栏菜单完全一致：goLicense 经 postMessage(menu_goto) 通知壳执行 onMenuSelect('license')，
+               壳切换 iframe src 到授权管理页（侧边栏保持、菜单高亮联动）——⚠️ 需壳 index.html 同步支持 */
+            loadLicBanner() {
+                App.loadInfo().then((info) => {
+                    if (!info || info.edition !== 'pro') {
+                        this.licBanner = null;
+                        return;
+                    }
+                    const d = info.days_left;
+                    if (info.state === 3 || (d !== null && d !== undefined && d < 0)) {
+                        this.licBanner = {
+                            cls: 'danger',
+                            icon: 'fa-circle-exclamation',
+                            text: '授权已过期，防护功能已停用（仅保留攻击拦截与业务转发），请立即续费恢复防护'
+                        };
+                    } else if (info.state === 2) {
+                        this.licBanner = {
+                            cls: 'grace',
+                            icon: 'fa-triangle-exclamation',
+                            text: '授权已到期，当前处于 48 小时宽限期（全功能保留），逾期将自动停用防护，请尽快续费'
+                        };
+                    } else if (info.state === 1 && d !== null && d !== undefined && d >= 0 && d <= 7) {
+                        this.licBanner = {
+                            cls: 'warn',
+                            icon: 'fa-clock',
+                            text: '授权将于 ' + d + ' 天后到期' + (info.expire_at ? '（' + info.expire_at + '）' : '') + '，请及时续费以免影响防护'
+                        };
+                    } else {
+                        this.licBanner = null;
+                    }
+                }).catch(() => {
+                });
+            },
+            goLicense() {
+                (window.parent !== window ? window.parent : window.top).postMessage({
+                    action: 'menu_goto',
+                    id: 'license'
+                }, '*');
+            },
+            fmt(n) {
+                n = Number(n) || 0;
+                if (String(n).indexOf('%') >= 0) return n;
+                if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+                return n.toLocaleString();
+            },
+            // 安全卡副标题：0s 提交/通过卡动态补派生率（回包率=提交/注入、通过率=通过/提交），
+            // 点明"注入按请求计、大部分注入是一次性爬虫"的口径，避免"注入=提交+沉默"的误读
+            statChange(card) {
+                if (card.key === 'zsec_submit') {
+                    return '回包率 ' + this.pct(this.stats.zsec_submit, this.stats.zsec_inject) + '（占注入）';
+                }
+                if (card.key === 'zsec_pass') {
+                    return '通过率 ' + this.pct(this.stats.zsec_pass, this.stats.zsec_submit) + '（占提交）';
+                }
+                return card.change;
+            },
+            pct(n, d) {
+                n = Number(n) || 0;
+                d = Number(d) || 0;
+                return d > 0 ? (n / d * 100).toFixed(1) + '%' : '—';
+            },
+            loadRealTime() {
+                const siteId = this.currentSiteId === 'all' ? 0 : this.currentSiteId;
+                // 秒级 QPS 实时吞吐（最近10分钟，后台已固定窗口）
+                App.api.requestStats.qps(siteId).then((s) => {
+                    if (s) this.qps = {points: s.points || [], peak: Number(s.peak) || 0};
+                    this.renderQps();
+                }).catch(() => {
+                });
+                // 访问情况 / 拦截情况（后台固定最近2小时、10分钟粒度）
+                App.api.requestStats.minute(siteId).then((s) => {
+                    if (s) this.minute = {req_points: s.req_points || [], block_points: s.block_points || []};
+                    this.renderVisit();
+                    this.renderBlock();
+                }).catch(() => {
+                });
+                // 最近攻击日志：实时卡，随实时刷新更新（不受 24h/7d/30d 影响）；复用分页 list 接口取近24小时前 8 条
+                App.api.attackLog.list({
+                    site_id: siteId || 0,
+                    page: 1,
+                    page_size: 8,
+                    start_time: this.hoursAgo(24)
+                }).then(({list}) => {
+                    this.attackLogList = list || [];
+                }).catch(() => {
+                });
+            },
+            /* hoursAgo 生成 h 小时前的 YYYY-MM-DD HH:mm:ss 时间串（仪表盘最近攻击固定 24h 窗口用） */
+            hoursAgo(h) {
+                const d = new Date(Date.now() - h * 3600000), p = n => String(n).padStart(2, '0');
+                return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+            },
+            loadSites() {
+                App.api.site.list(1, 100).then(({list}) => {
+                    if (list && list.length) this.siteList = list.map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        domain: (s.domains || '').split(',')[0]
+                    }));
+                }).catch(() => {
+                });
+            },
+            onTimeRangeChange() {
+                // 切换 24h/7d/30d 时重新拉取随范围变化的统计数据（实时三卡与攻击日志不受影响）
+                this.load();
+            },
+            onSiteChange() {
+                // 切换站点时重新拉取该站点数据（含实时三卡，按所选站点过滤）
+                this.load();
+            },
+            load() {
+                const siteId = this.currentSiteId === 'all' ? 0 : this.currentSiteId;
+                const range = this.currentTimeRange;
+                App.api.accessStats.stats(siteId, range).then((s) => {
+                    if (s) this.stats = Object.assign(this.stats, s);
+                    this.renderCharts();
+                }).catch(() => {
+                });
+                // 安全类 KPI（人机验证/CC/攻击IP/类型分布）已随 access_stats/stats 一并返回
+                // 维度分布（request_stats 模块：地域/状态/客户端/来源域名/受访问域名 + 4xx/5xx）
+                App.api.requestStats.dim(siteId, range).then((s) => {
+                    if (s) {
+                        this.dim = {
+                            geo_country: s.geo_country || [],
+                            geo_province: s.geo_province || [],
+                            geo_country_block: s.geo_country_block || [],
+                            geo_province_block: s.geo_province_block || [],
+                            status_dist: s.status_dist || [],
+                            client_top: s.client_top || [],
+                            referer_top: s.referer_top || [],
+                            host_top: s.host_top || [],
+                            ip_top: s.ip_top || [],
+                            url_top: s.url_top || [],
+                            ua_top: s.ua_top || []
+                        };
+                        this.stats = Object.assign(this.stats, {
+                            err4xx: s.err4xx,
+                            err4xxRate: s.err4xxRate,
+                            err5xx: s.err5xx,
+                            err5xxRate: s.err5xxRate
+                        });
+                    }
+                    this.renderCharts();
+                }).catch(() => {
+                });
+                // 实时三卡（QPS / 访问情况 / 拦截情况）：不随 24h/7d/30d 变化，单独定时刷新
+                this.loadRealTime();
+            },
+            attackTag(t) {
+                return {
+                    custom_rule: 'custom',
+                    cc: 'cc',
+                    challenge: 'challenge',
+                    js_challenge: 'challenge',
+                    api_challenge: 'challenge',
+                    crawler_ip: 'custom',
+                    waiting_room: 'waiting_room',
+                    sec_ch_ua: 'custom',
+                    sql: 'danger',
+                    xss: 'danger',
+                    lfi: 'danger',
+                    cmdi: 'danger',
+                    ssrf: 'danger',
+                    ssti: 'danger',
+                    deserial: 'danger',
+                    infoleak: 'danger',
+                    shell: 'danger',
+                    uri_too_long: 'custom'
+                }[t] || 'other';
+            },
+            attackLabel(t) {
+                const legacy = {js_challenge: 'JS挑战', api_challenge: 'API挑战'};
+                return legacy[t] || App.ui.attackLabel(t);
+            },
+            actionLabel(a) {
+                return {
+                    block: '拦截',
+                    challenge: '人机验证',
+                    observe: '观察',
+                    pass: '放行',
+                    redirect: '302跳转',
+                    waiting_room: '等候室'
+                }[a] || (a || '-');
+            },
+            siteName(id) {
+                const s = this.siteList.find(x => x.id == id);
+                return s ? s.name : ('站点#' + id);
+            },
+            getChart(id, el) {
+                if (!this.charts[id]) this.charts[id] = echarts.init(el);
+                return this.charts[id];
+            },
+            chartColors() {
+                const g = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+                return {
+                    tooltipBg: g('--chart-tooltip-bg'),
+                    tooltipBorder: g('--chart-tooltip-border'),
+                    tooltipText: g('--chart-tooltip-text'),
+                    axisLine: g('--chart-axis-line'),
+                    splitLine: g('--chart-split-line'),
+                    axisLabel: g('--chart-axis-label'),
+                    legendText: g('--chart-legend-text'),
+                    borderColor: g('--chart-border-color'),
+                    labelColor: g('--chart-label-color')
+                };
+            },
+            emptyTip(chart, label) {
+                chart.clear();
+                chart.setOption({
+                    graphic: {
+                        type: 'text',
+                        left: 'center',
+                        top: 'middle',
+                        style: {text: label || '暂无数据', fill: '#5c6b7d', fontSize: 13}
+                    }
+                });
+            },
+            renderCharts() {
+                this.$nextTick(() => {
+                    this.renderType();
+                    this.renderGeo();
+                    this.renderClient();
+                    this.renderStatus();
+                    this.renderReferer();
+                    this.renderHost();
+                    this.renderQps();
+                    this.renderVisit();
+                    this.renderBlock();
+                });
+            },
+            renderType() {
+                const el = this.$refs.typeChart;
+                if (!el) return;
+                const chart = this.getChart('typeChart', el);
+                const c = this.chartColors();
+                const agg = {};
+                (this.stats.attack_type_dist || []).forEach(d => {
+                    let t = d.type || 'other';
+                    if (t === 'crawlerIp') t = 'crawler_ip'; else if (t === 'customRule') t = 'custom_rule'; else if (t === 'waitingRoom') t = 'waiting_room_full'; // 引擎历史驼峰键归一（蛇形统一过渡期）
+                    agg[t] = (agg[t] || 0) + (Number(d.count) || 0);
+                });
+                // 配色统一走权威色板 App.ui.attackColor（ui.js ATTACK_COLORS），与攻击日志页共享
+                const dist = Object.entries(agg).map(([t, n]) => ({
+                    name: this.attackLabel(t),
+                    value: n,
+                    itemStyle: {color: App.ui.attackColor(t)}
+                }));
+                chart.clear();
+                if (!dist.length) {
+                    this.emptyTip(chart);
+                    return;
+                }
+                chart.setOption({
+                    backgroundColor: 'transparent',
+                    animation: false,
+                    tooltip: {
+                        confine: true,
+                        trigger: 'item',
+                        backgroundColor: c.tooltipBg,
+                        borderColor: c.tooltipBorder,
+                        textStyle: {color: c.tooltipText}
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        right: 5,
+                        top: 'middle',
+                        textStyle: {color: c.legendText, fontSize: 11},
+                        itemWidth: 10,
+                        itemHeight: 10
+                    },
+                    series: [{
+                        type: 'pie', radius: ['40%', '68%'], center: ['35%', '50%'],
+                        itemStyle: {borderRadius: 5, borderColor: c.borderColor, borderWidth: 2},
+                        label: {show: true, formatter: '{d}%', color: c.labelColor, fontSize: 11},
+                        data: dist
+                    }]
+                });
+            },
+            /* 通用：横向条形图（用于 TopN 列表） */
+            renderHBar(elId, label, data, color) {
+                const el = this.$refs[elId];
+                if (!el) return;
+                const chart = this.getChart(elId, el);
+                const c = this.chartColors();
+                const rows = (data || []).slice(0, 10);
+                chart.clear();
+                if (!rows.length) {
+                    this.emptyTip(chart);
+                    return;
+                }
+                const names = rows.map(r => r.dim_key || '-').reverse();
+                const vals = rows.map(r => Number(r.count) || 0).reverse();
+                chart.setOption({
+                    backgroundColor: 'transparent',
+                    animation: false,
+                    tooltip: {
+                        confine: true,
+                        trigger: 'item',
+                        backgroundColor: c.tooltipBg,
+                        borderColor: c.tooltipBorder,
+                        textStyle: {color: c.tooltipText},
+                        formatter: (pp) => {
+                            const p = Array.isArray(pp) ? pp[0] : pp;
+                            if (!p || p.dataIndex == null) return '';
+                            const n = names[p.dataIndex] || p.name || '';
+                            return n + '<br/>' + (p.marker || '') + label + '：<b>' + p.value + '</b>';
+                        }
+                    },
+                    grid: {left: 8, right: 52, top: 8, bottom: 4, containLabel: true},
+                    xAxis: {
+                        type: 'value',
+                        splitLine: {lineStyle: {color: c.splitLine}},
+                        axisLabel: {color: c.axisLabel}
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: names,
+                        axisLine: {lineStyle: {color: c.axisLine}},
+                        axisLabel: {color: c.axisLabel, width: 120, overflow: 'truncate'}
+                    },
+                    series: [{
+                        name: label,
+                        type: 'bar',
+                        barWidth: 12,
+                        data: vals,
+                        itemStyle: {borderRadius: [0, 4, 4, 0], color: color},
+                        label: {
+                            show: true,
+                            position: 'right',
+                            fontSize: 11,
+                            color: c.axisLabel,
+                            formatter: (p) => this.fmt(vals[p.dataIndex] ?? 0)
+                        }
+                    }]
+                });
+            },
+            geoSource() {
+                const type = this.geoType === 'block' ? '_block' : '';
+                return this.dim[this.geoScope === 'world' ? ('geo_country' + type) : ('geo_province' + type)] || [];
+            },
+            /* 访问来源地域：中国/世界地图，按省份/国家请求数上色 */
+            setGeo(scope) {
+                this.geoScope = scope;
+                this.renderGeo();
+            },
+            setGeoType(type) {
+                this.geoType = type;
+                this.renderGeo();
+            },
+            /* 地域名归一化：后端 ip2region 返回简称（如"广东"），echarts-map 用全称（如"广东省"）
+               国内地图按简称→全称映射；已是全称或世界地图国家名则原样返回 */
+            mapRegionName(name, mapName) {
+                if (!name) return name;
+                if (mapName === 'china') {
+                    return CHINA_PROVINCE_FULL[name] || name;
+                }
+                // world 地图：GeoJSON 国家名已改为中文，后端 ip2region 返回的也是中文国名，
+                // 直接返回即可匹配上色；个别 ip2region 别称如需对齐可在此补充 别名->标准名 映射
+                return (name || '').trim();
+            },
+            renderGeo() {
+                const el = this.$refs.geoChart;
+                if (!el) return;
+                const chart = this.getChart('geoChart', el);
+                const c = this.chartColors();
+                const world = this.geoScope === 'world';
+                const mapName = world ? 'world' : 'china';
+                const src = this.geoSource();
+                // 地图依赖静态文件存放位置，部署路径(web根/子目录)不确定，逐个候选地址尝试加载
+                const geoUrlCandidates = [
+                    '../static/lib/echarts-map/' + mapName + '.json',
+                    '/static/lib/echarts-map/' + mapName + '.json',
+                    './static/lib/echarts-map/' + mapName + '.json'
+                ];
+                const unitName = this.geoType === 'block' ? '拦截量' : '访问量';
+                const show = (geoJson) => {
+                    if (!echarts.getMap(mapName)) echarts.registerMap(mapName, geoJson);
+                    const data = src.map(x => ({
+                        name: this.mapRegionName(x.dim_key, mapName),
+                        value: Number(x.count) || 0
+                    }))
+                        // 国内地图仅保留中国 34 省级行政区，过滤 ip2region 对海外 IP 解析出的州/区域名（如 Virginia）；
+                        // 海外的请求归属到 country 维度渲染底层地图底图即可，省份地图无需展示
+                        .filter(d => world ? d.name : CHINA_PROVINCE_SET.has(d.name));
+                    chart.clear();
+                    // 无论是否有地域数据都渲染地图底图（无数据时呈灰色，省份仍可 hover），避免"暂无数据"致地图消失
+                    const maxV = Math.max(1, ...data.map(d => d.value));
+                    chart.setOption({
+                        backgroundColor: 'transparent',
+                        animation: false,
+                        tooltip: {
+                            confine: true,
+                            trigger: 'item',
+                            backgroundColor: c.tooltipBg,
+                            borderColor: c.tooltipBorder,
+                            textStyle: {color: c.tooltipText},
+                            formatter: p => (p.name + '<br/>' + unitName + '：' + (p.value == null ? 0 : p.value))
+                        },
+                        visualMap: {
+                            min: 0,
+                            max: maxV,
+                            left: 20,
+                            bottom: 10,
+                            orient: 'horizontal',
+                            calculable: false,
+                            text: ['低', '高'],
+                            inRange: {color: ['#dbeafe', '#2f7bf6']},
+                            textStyle: {color: c.axisLabel, fontSize: 11},
+                            itemWidth: 10,
+                            itemHeight: 100,
+                            itemGap: 10,
+                            itemSymbol: 'roundRect'
+                        },
+                        series: [{
+                            name: unitName,
+                            type: 'map',
+                            map: mapName,
+                            roam: true,
+                            zoom: world ? 1.0 : 1.05,
+                            scaleLimit: {min: 1, max: 5},
+                            label: {show: false},
+                            emphasis: {label: {show: world, fontSize: 10}},
+                            itemStyle: {
+                                areaColor: 'rgba(64,74,94,0.6)',
+                                borderColor: 'rgba(130,150,180,0.5)',
+                                borderWidth: 0.6
+                            },
+                            data: data
+                        }]
+                    });
+                };
+                // 内存缓存命中则直接渲染
+                if (this._geoCache && this._geoCache[mapName]) {
+                    show(this._geoCache[mapName]);
+                    return;
+                }
+                // localStorage 缓存命中则还原到内存并渲染（避免每次刷新页面重复下载大 JSON）
+                const cacheRead = () => {
+                    try {
+                        const s = localStorage.getItem(GEO_CACHE_KEY + mapName);
+                        if (!s) return null;
+                        const g = JSON.parse(s);
+                        return (g && g.features) ? g : null;
+                    } catch (e) {
+                        return null;
+                    }
+                };
+                const cacheWrite = (g) => {
+                    try {
+                        localStorage.setItem(GEO_CACHE_KEY + mapName, JSON.stringify(g));
+                    } catch (e) { /* 超出配额时忽略 */
+                    }
+                };
+                const cached = cacheRead();
+                if (cached) {
+                    if (!this._geoCache) this._geoCache = {};
+                    this._geoCache[mapName] = cached;
+                    show(cached);
+                    return;
+                }
+                // 后台预取另一张地图（避免首次切换国内/全球时再次等待下载）
+                const prefetch = (other) => {
+                    if (this._geoCache && this._geoCache[other]) return;
+                    if (GEO_CACHE_KEY && localStorage.getItem(GEO_CACHE_KEY + other)) return;
+                    const url = '../static/lib/echarts-map/' + other + '.json';
+                    fetch(url).then(r => {
+                        if (!r.ok) throw 0;
+                        return r.json();
+                    }).then(g => {
+                        if (!this._geoCache) this._geoCache = {};
+                        this._geoCache[other] = g;
+                        cacheWriteFor(other, g);
+                    }).catch(() => {
+                    });
+                };
+                const cacheWriteFor = (name, g) => {
+                    try {
+                        localStorage.setItem(GEO_CACHE_KEY + name, JSON.stringify(g));
+                    } catch (e) { /* ignore */
+                    }
+                };
+                const tryLoad = (i) => {
+                    if (i >= geoUrlCandidates.length) {
+                        chart.clear();
+                        return;
+                    }
+                    fetch(geoUrlCandidates[i]).then(r => {
+                        if (!r.ok) throw new Error('geo fetch ' + r.status);
+                        return r.json();
+                    }).then(g => {
+                        if (!this._geoCache) this._geoCache = {};
+                        this._geoCache[mapName] = g;
+                        cacheWrite(g);
+                        show(g);
+                        prefetch(world ? 'china' : 'world');
+                    }).catch(() => tryLoad(i + 1));
+                };
+                tryLoad(0);
+            },
+            /* 客户端 UA TopN */
+            renderClient() {
+                const el = this.$refs.clientChart;
+                if (!el) return;
+                const chart = this.getChart('clientChart', el);
+                const c = this.chartColors();
+                const palette = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9'];
+                const src = (this.dim.client_top || []).slice(0, 6);
+                const dist = src.map((d, i) => {
+                    const ua = d.dim_key || '-';
+                    const short = ua.length > 12 ? ua.slice(0, 12) + '…' : ua;
+                    return {
+                        name: short,
+                        full: ua,
+                        value: Number(d.count) || 0,
+                        itemStyle: {color: palette[i % palette.length]}
+                    };
+                });
+                chart.clear();
+                if (!dist.length) {
+                    this.emptyTip(chart);
+                    return;
+                }
+                chart.setOption({
+                    backgroundColor: 'transparent',
+                    animation: false,
+                    tooltip: {
+                        confine: true,
+                        trigger: 'item',
+                        backgroundColor: c.tooltipBg,
+                        borderColor: c.tooltipBorder,
+                        textStyle: {color: c.tooltipText},
+                        formatter: p => ((p.data && p.data.full) || p.name) + '<br/>占比：' + Math.round((p.percent || 0) * 10) / 10 + '%'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        right: 2,
+                        top: 'middle',
+                        textStyle: {color: c.legendText, fontSize: 11},
+                        itemWidth: 10,
+                        itemHeight: 10
+                    },
+                    series: [{
+                        type: 'pie',
+                        radius: ['45%', '68%'],
+                        center: ['38%', '50%'],
+                        itemStyle: {borderRadius: 4, borderColor: c.borderColor, borderWidth: 2},
+                        label: {show: false},
+                        data: dist
+                    }]
+                });
+            },
+            /* 响应状态分布（饼图） */
+            renderStatus() {
+                const el = this.$refs.statusChart;
+                if (!el) return;
+                const chart = this.getChart('statusChart', el);
+                const c = this.chartColors();
+                const palette = {'2': '#10b981', '3': '#f59e0b', '4': '#f59e0b', '5': '#ef4444', '0': '#5c6b7d'};
+                const dist = (this.dim.status_dist || [])
+                    .map(d => ({
+                        name: d.status || '-',
+                        value: Number(d.count) || 0,
+                        itemStyle: {color: palette[String(d.status || '')[0]] || palette['0']}
+                    }));
+                chart.clear();
+                if (!dist.length) {
+                    this.emptyTip(chart);
+                    return;
+                }
+                chart.setOption({
+                    backgroundColor: 'transparent',
+                    animation: false,
+                    tooltip: {
+                        confine: true,
+                        trigger: 'item',
+                        backgroundColor: c.tooltipBg,
+                        borderColor: c.tooltipBorder,
+                        textStyle: {color: c.tooltipText}
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        right: 2,
+                        top: 'middle',
+                        textStyle: {color: c.legendText, fontSize: 11},
+                        itemWidth: 10,
+                        itemHeight: 10
+                    },
+                    series: [{
+                        type: 'pie',
+                        radius: ['45%', '68%'],
+                        center: ['38%', '50%'],
+                        itemStyle: {borderRadius: 4, borderColor: c.borderColor, borderWidth: 2},
+                        label: {show: true, formatter: '{d}%', color: c.labelColor, fontSize: 11},
+                        data: dist
+                    }]
+                });
+            },
+            /* 外部来源域名 TopN */
+            renderReferer() {
+                this.renderHBar('refererChart', '外部来源域名', this.dim.referer_top, '#06b6d4');
+            },
+            /* 受访问域名 TopN */
+            renderHost() {
+                this.renderHBar('hostChart', '受访问域名', this.dim.host_top, '#f59e0b');
+            },
+            /* 秒级 QPS 实时吞吐（最近5分钟折线） */
+            renderQps() {
+                const el = this.$refs.qpsChart;
+                if (!el) return;
+                const chart = this.getChart('qpsChart', el);
+                const c = this.chartColors();
+                const points = this.qps.points || [];
+                chart.clear();
+                if (!points.length) {
+                    this.emptyTip(chart, '暂无数据，等待引擎上报');
+                    return;
+                }
+                const labels = points.map(p => p.bucket || '');
+                const data = points.map(p => Number(p.count) || 0);
+                const tooltip = {
+                    confine: true,
+                    trigger: 'item',
+                    alwaysShowContent: false,
+                    backgroundColor: c.tooltipBg,
+                    borderColor: c.tooltipBorder,
+                    textStyle: {color: c.tooltipText},
+                    formatter: (p) => {
+                        if (!p || p.dataIndex == null) return '';
+                        const t = labels[p.dataIndex] || p.name || '';
+                        return t + '<br/>' + p.marker + 'QPS：<b>' + p.value + '</b> req/s';
+                    }
+                };
+                chart.setOption({
+                    backgroundColor: 'transparent',
+                    animation: false,
+                    tooltip,
+                    grid: {left: 44, right: 12, top: 15, bottom: 22},
+                    xAxis: {
+                        type: 'category',
+                        data: labels,
+                        boundaryGap: false,
+                        axisLine: {lineStyle: {color: c.axisLine}},
+                        axisLabel: {
+                            color: c.axisLabel,
+                            interval: Math.max(0, Math.round(labels.length / 40) - 1),
+                            rotate: labels.length > 60 ? 35 : 0,
+                            hideOverlap: true
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        splitLine: {lineStyle: {color: c.splitLine}},
+                        axisLabel: {color: c.axisLabel, formatter: (v) => v}
+                    },
+                    series: [{
+                        name: 'QPS',
+                        type: 'line',
+                        smooth: true,
+                        showSymbol: true,
+                        symbol: 'circle',
+                        symbolSize: labels.length > 240 ? 4 : 7,
+                        data,
+                        lineStyle: {width: 2, color: '#22d3ee'},
+                        itemStyle: {color: '#22d3ee'},
+                        emphasis: {focus: 'series', itemStyle: {color: '#0ea5e9', borderColor: '#fff', borderWidth: 2}},
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+                                offset: 0,
+                                color: '#22d3ee44'
+                            }, {offset: 1, color: '#22d3ee00'}])
+                        }
+                    }]
+                });
+            },
+            /* 访问情况（10 分钟粒度） */
+            renderVisit() {
+                this.renderTrendLine('visitChart', this.minute.req_points, '访问情况', '#22d3ee');
+            },
+            /* 拦截情况（10 分钟粒度） */
+            renderBlock() {
+                this.renderTrendLine('blockChart', this.minute.block_points, '拦截情况', '#ef4444');
+            },
+            /* 通用：10 分钟粒度折线 */
+            renderTrendLine(elId, list, name, color) {
+                const el = this.$refs[elId];
+                if (!el) return;
+                const chart = this.getChart(elId, el);
+                const c = this.chartColors();
+                const points = list || [];
+                chart.clear();
+                if (!points.length) {
+                    this.emptyTip(chart);
+                    return;
+                }
+                const labels = points.map(p => String(p.bucket || '').slice(11));
+                const data = points.map(p => Number(p.count) || 0);
+                const tooltip = {
+                    confine: true,
+                    trigger: 'item',
+                    alwaysShowContent: false,
+                    backgroundColor: c.tooltipBg,
+                    borderColor: c.tooltipBorder,
+                    textStyle: {color: c.tooltipText},
+                    formatter: (p) => {
+                        if (!p || p.dataIndex == null) return '';
+                        const t = labels[p.dataIndex] || p.name || '';
+                        return t + '<br/>' + p.marker + name + '：<b>' + p.value + '</b>';
+                    }
+                };
+                chart.setOption({
+                    backgroundColor: 'transparent',
+                    animation: false,
+                    tooltip,
+                    grid: {left: 44, right: 12, top: 15, bottom: 22},
+                    xAxis: {
+                        type: 'category',
+                        data: labels,
+                        boundaryGap: false,
+                        axisLine: {lineStyle: {color: c.axisLine}},
+                        axisLabel: {
+                            color: c.axisLabel,
+                            interval: Math.max(0, Math.round(labels.length / 40) - 1),
+                            rotate: labels.length > 48 ? 35 : 0,
+                            hideOverlap: true
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        splitLine: {lineStyle: {color: c.splitLine}},
+                        axisLabel: {color: c.axisLabel}
+                    },
+                    series: [{
+                        name,
+                        type: 'line',
+                        smooth: true,
+                        showSymbol: true,
+                        symbol: 'circle',
+                        symbolSize: labels.length > 240 ? 4 : 7,
+                        data,
+                        lineStyle: {width: 2, color},
+                        itemStyle: {color},
+                        emphasis: {focus: 'series', itemStyle: {color: '#fff', borderColor: color, borderWidth: 2}},
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+                                offset: 0,
+                                color: color + '44'
+                            }, {offset: 1, color: color + '00'}])
+                        }
+                    }]
+                });
+            },
+            resizeCharts() {
+                try {
+                    Object.values(this.charts).forEach(ch => ch && ch.resize());
+                } catch (e) { /* 忽略 resize 竞态 */
+                }
+            }
+        }
+    });
+    for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+    app.use(ElementPlus, {locale: ElementPlusLocaleZhCn});
+    app.mount('#app');
+</script>
+</body>
+</html>

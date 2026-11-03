@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>导入白名单规则</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ============================================================
+       导入白名单规则弹窗页（iframe，与 add.html 同壳）：JSON 文件导入
+       ============================================================ */
+    html, body { height: 100%; background: var(--bg-card); }
+    #app { height: 100%; }
+    .edit-container { height: 100%; box-sizing: border-box; padding: 16px 20px 0; display: flex; flex-direction: column; }
+    .edit-body { flex: 1; overflow-y: auto; }
+    .edit-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 0 16px; border-top: 1px solid var(--border); margin-top: 8px; }
+    .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
+    .mono { font-family: "SF Mono", Consolas, monospace; }
+
+    .el-button--default { background-color: transparent !important; border-color: var(--border) !important; color: var(--text-secondary) !important; }
+    .el-button--default:hover { background-color: transparent !important; border-color: var(--accent) !important; color: var(--accent) !important; }
+    .el-button--primary { background-color: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
+    .el-upload-dragger { background: var(--bg-input) !important; border-color: var(--border) !important; }
+    .el-upload-dragger:hover { border-color: var(--accent) !important; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="edit-container">
+    <div class="edit-body">
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item label="规则文件 *">
+          <el-upload drag action="#" :auto-upload="false" :show-file-list="false" :on-change="handleFile" accept=".json" style="width:100%;">
+            <div style="padding:14px 0;">
+              <i class="fa-solid fa-cloud-arrow-up" style="font-size:24px;color:var(--accent);"></i>
+              <div style="font-size:13px;color:var(--text-secondary);margin-top:8px;">点击选择 JSON 文件（或拖拽到此处），选中后立即导入</div>
+            </div>
+          </el-upload>
+          <div class="form-hint">文件格式：JSON 数组，每条含 name / target / operator / value 字段；action 为 pass 时导入为放行规则（跳过自定义规则），否则为观察。</div>
+          <div class="form-hint">示例：<span class="mono">[{"name":"放行搜索爬虫","target":"uri","operator":"contains","value":"spider","action":"pass"}]</span></div>
+          <div class="form-hint">当前导入范围：<span style="color:var(--accent)">{{ scopeTip }}</span></div>
+        </el-form-item>
+      </el-form>
+    </div>
+    <div class="edit-footer">
+      <el-button @click="onCancel"><i class="fa-solid fa-xmark"></i> 取消</el-button>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      siteId: 0,
+      scopeTip: '',
+      importing: false
+    };
+  },
+  mounted() {
+    ThemeManager.init();
+    const params = new URLSearchParams(window.location.search);
+    this.siteId = parseInt(params.get('site_id'), 10) || 0;
+    // 导入范围提示：按父页传入的 site_id 反查站点名
+    App.api.site.list(1, 100).then(({ list }) => {
+      const s = (list || []).find(x => x.id === this.siteId);
+      this.scopeTip = this.siteId > 0 && s ? ('站点私有规则 · ' + s.name) : '全局规则（所有站点生效）';
+    }).catch(() => {
+      this.scopeTip = this.siteId > 0 ? ('站点私有规则 · 站点#' + this.siteId) : '全局规则（所有站点生效）';
+    });
+  },
+  methods: {
+    /* 选中文件即导入（沿用原列表页行为）：JSON 数组逐条落库，成功后关闭并刷新父页列表 */
+    handleFile(file) {
+      if (!file || !file.raw || this.importing) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        let payload;
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (!Array.isArray(data)) throw new Error('文件内容必须是 JSON 数组');
+          payload = data.map(item => ({
+            site_id: this.siteId,
+            name: item.name || '导入规则',
+            target: item.target || 'uri',
+            operator: item.operator || 'contains',
+            value: item.value || '',
+            skip_rule: item.action === 'pass' ? 1 : 0,
+            skip_challenge: 0,
+            skip_cc: 0,
+            status: 1
+          }));
+        } catch (err) {
+          ElementPlus.ElMessage.error('导入失败：' + err.message);
+          return;
+        }
+        this.importing = true;
+        let chain = Promise.resolve();
+        payload.forEach(item => { chain = chain.then(() => App.api.whitelist.save(item)); });
+        chain.then(() => {
+          DialogBridge.close({ id: 'wl_import', msg: '成功导入 ' + payload.length + ' 条规则', refresh: true });
+        }).catch(() => {}).finally(() => { this.importing = false; });
+      };
+      reader.readAsText(file.raw);
+    },
+    onCancel() {
+      DialogBridge.close({ id: 'wl_import', msg: '', refresh: false });
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

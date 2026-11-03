@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC防护</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ============================================================
+       CC防护页面样式（1:1 对齐 UI/cc）
+       ============================================================ */
+    html, body { height: 100%; }
+    #app { height: 100%; }
+    .page-container { height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box; background: var(--content-gradient), var(--bg-body); }
+    .page-container::-webkit-scrollbar { width: 6px; }
+    .page-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+    /* ===== 弹窗 ===== */
+    .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); width: 380px; max-width: 92%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); animation: modalIn 0.2s ease; }
+    @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .modal-icon.danger { background: rgba(239,68,68,0.12); color: var(--danger); }
+    .modal-title { font-size: 14px; font-weight: 600; }
+    .modal-body { padding: 18px 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+    .modal-body .rule-name { color: var(--text-primary); font-weight: 600; font-family: "SF Mono", Consolas, monospace; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 18px; border-top: 1px solid var(--border); }
+
+    /* ===== 操作按钮组 ===== */
+    .row-actions { display: inline-flex; gap: 6px; }
+
+    /* ===== 处置动作标签 ===== */
+    .action-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    .action-observe { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .action-block { background: rgba(239,68,68,0.12); color: #f87171; }
+    .action-challenge { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .action-waiting_room { background: rgba(6,182,212,0.12); color: #22d3ee; }
+    .action-redirect { background: rgba(139,92,246,0.12); color: #a78bfa; }
+
+    /* ===== 统计维度标签 ===== */
+    .dim-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: rgba(139,92,246,0.12); color: #a78bfa; }
+
+    /* ===== 匹配条件摘要 ===== */
+    .cond-summary { font-size: 12px; color: var(--text-secondary); }
+    .cond-summary .cond-num { color: var(--text-primary); font-weight: 600; }
+    .cond-summary.none { color: var(--text-muted); }
+
+    /* ===== 表格内开关垂直对齐 ===== */
+    td .switch { vertical-align: middle; }
+
+    /* ===== 拖拽 ===== */
+    .drag-handle { cursor: grab; color: var(--text-muted); font-size: 14px; }
+    .drag-handle:active { cursor: grabbing; }
+    tr.dragging { opacity: 0.4; }
+    tr.drag-over { box-shadow: inset 0 2px 0 var(--accent); }
+
+    @media (max-width: 768px) { .page-container { padding: 14px; } }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="page-container">
+    <!-- 统计卡片 -->
+    <div class="stat-grid cols-3">
+      <div class="stat-card">
+        <div class="stat-top"><span class="stat-label">今日触发CC规则次数</span><span class="stat-icon icon-purple"><i class="fa-solid fa-stopwatch"></i></span></div>
+        <div class="stat-value">{{ fmtNum(statTrigger) }}</div>
+        <div class="stat-change">近24小时累计拦截</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><span class="stat-label">当前封禁IP数</span><span class="stat-icon icon-red"><i class="fa-solid fa-ban"></i></span></div>
+        <div class="stat-value">{{ statBanned }}</div>
+        <div class="stat-change">暂无数据</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><span class="stat-label">活跃CC规则数</span><span class="stat-icon icon-green"><i class="fa-solid fa-shield-halved"></i></span></div>
+        <div class="stat-value">{{ statActive }}</div>
+        <div class="stat-change">共 {{ total }} 条规则</div>
+      </div>
+    </div>
+
+    <!-- 规则列表 -->
+    <div class="section-title">规则列表<span class="sub">CC Rules</span></div>
+    <div class="card">
+      <div class="card-body" style="padding:0;">
+        <!-- 工具栏 -->
+        <div class="toolbar" style="margin-bottom:0;padding:14px 16px;border-bottom:1px solid var(--border);">
+          <div class="toolbar-left">
+            <span class="filter-label"><i class="fa-solid fa-filter"></i> 站点筛选</span>
+            <el-select v-model="filterSite" style="width:180px;" placeholder="全部站点" clearable @change="onFilterChange">
+              <el-option label="全部站点" :value="''"></el-option>
+              <el-option v-for="s in sites" :key="s.id" :label="s.name" :value="s.id"></el-option>
+            </el-select>
+          </div>
+          <div class="toolbar-right">
+            <el-button type="primary" @click="openAdd"><i class="fa-solid fa-plus"></i> 新增规则</el-button>
+          </div>
+        </div>
+        <!-- 表格（拖拽事件从行冒泡至 .table-wrap 委托处理） -->
+        <div class="table-wrap" @dragstart="dragStart" @dragend="dragEnd" @dragover.prevent="dragOver" @drop="drop">
+          <el-table :data="paged" style="width:100%" empty-text="暂无匹配规则"
+            :row-class-name="({ row }) => (row.id === dragId ? 'dragging' : '') + (row.id === dragOverId ? ' drag-over' : '')">
+            <el-table-column label="排序" width="50" align="center">
+              <template #default="{ row }"><i class="fa-solid fa-grip-vertical drag-handle" title="拖拽排序" @mousedown="rowMouseDown(row, $event)"></i></template>
+            </el-table-column>
+            <el-table-column label="规则名称" min-width="140">
+              <template #default="{ row }"><span class="mono">{{ row.name }}</span></template>
+            </el-table-column>
+            <el-table-column label="站点" min-width="120">
+              <template #default="{ row }"><span style="font-size:12px;color:var(--text-secondary);">{{ siteName(row.site_id) }}</span></template>
+            </el-table-column>
+            <el-table-column label="统计维度" width="100">
+              <template #default="{ row }"><span class="dim-tag">{{ dimLabel(row.target) }}</span></template>
+            </el-table-column>
+            <el-table-column label="匹配条件" min-width="110">
+              <template #default="{ row }"><span class="cond-summary" :class="{ none: !condSummary(row) }">{{ condSummary(row) || '无条件' }}</span></template>
+            </el-table-column>
+            <el-table-column label="速率阈值" width="120">
+              <template #default="{ row }">{{ row.threshold }}次/{{ row.window }}秒</template>
+            </el-table-column>
+            <el-table-column label="处置动作" width="140">
+              <template #default="{ row }"><span class="action-tag" :class="actionMeta(row.action).cls"><i class="fa-solid" :class="actionMeta(row.action).icon"></i>{{ actionMeta(row.action).label }}</span></template>
+            </el-table-column>
+            <el-table-column label="状态" width="80" align="center">
+              <template #default="{ row }">
+                <el-switch :model-value="row.status === 1" @change="v => toggleStatus(row, v)"></el-switch>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="160" fixed="right">
+              <template #default="{ row }">
+                <div class="row-actions">
+                  <el-button size="small" @click="openEdit(row)"><i class="fa-solid fa-pen"></i> 编辑</el-button>
+                  <el-button size="small" type="danger" @click="openDel(row)"><i class="fa-solid fa-trash"></i> 删除</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <!-- 分页 -->
+        <el-pagination
+          background
+          layout="prev, pager, next, total"
+          :total="total"
+          :page-size="pageSize"
+          :current-page="page"
+          @current-change="goPage">
+        </el-pagination>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除确认弹窗 -->
+  <div class="modal-mask" v-show="delModal.show" @click.self="closeDelModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-icon danger"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <span class="modal-title">删除确认</span>
+      </div>
+      <div class="modal-body">确定要删除CC规则 <span class="rule-name">{{ delModal.name }}</span> 吗？<br>删除后该规则将立即停止生效，不可恢复。</div>
+      <div class="modal-footer">
+        <el-button @click="closeDelModal">取消</el-button>
+        <el-button type="danger" @click="confirmDel"><i class="fa-solid fa-trash"></i> 确认删除</el-button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      sites: [],
+      list: [],
+      filterSite: '',
+      page: 1, pageSize: 5,
+      statTrigger: 0,
+      statBanned: 0,
+      dragId: null, dragOverId: null,
+      delModal: { show: false, id: null, name: '' },
+      actionMap: {
+        observe: { label: '观察', cls: 'action-observe', icon: 'fa-eye' },
+        block: { label: '直接拦截', cls: 'action-block', icon: 'fa-ban' },
+        waiting_room: { label: '等候室排队', cls: 'action-waiting_room', icon: 'fa-hourglass-half' },
+        redirect: { label: '302重定向', cls: 'action-redirect', icon: 'fa-arrow-right' }
+      }
+    };
+  },
+  computed: {
+    filtered() {
+      if (!this.filterSite) return this.list;
+      return this.list.filter(r => r.site_id === this.filterSite || r.site_id === 0);
+    },
+    total() { return this.filtered.length; },
+    statActive() { return this.list.filter(r => r.status === 1).length; },
+    totalPages() { return Math.max(1, Math.ceil(this.total / this.pageSize)); },
+    pageItems() {
+      const tp = this.totalPages, cur = this.page;
+      const items = [];
+      for (let i = 1; i <= tp; i++) {
+        if (i === 1 || i === tp || (i >= cur - 2 && i <= cur + 2)) items.push(i);
+        else if (i === cur - 3 || i === cur + 3) items.push('...');
+      }
+      return items;
+    },
+    paged() {
+      const start = (this.page - 1) * this.pageSize;
+      return this.filtered.slice(start, start + this.pageSize);
+    }
+  },
+  watch: {
+    'filtered.length'() {
+      if (this.page > this.totalPages) this.page = 1;
+    }
+  },
+  mounted() {
+    ThemeManager.init();
+    App.api.site.list(1, 100).then(({ list }) => { this.sites = list || []; }).catch(() => {});
+    this.load();
+    this.loadStats();
+    window.onSearch = () => this.load();
+  },
+  methods: {
+    fmtNum(v) { return (parseInt(v, 10) || 0).toLocaleString(); },
+    siteName(id) {
+      if (id === 0 || id === '0') return '全局';
+      const s = this.sites.find(x => String(x.id) === String(id));
+      return s ? s.name : id;
+    },
+    dimLabel(t) {
+      return { ip: 'IP', ip_uri: 'IP + URI', ip_ua: 'IP + UA', ip_url: 'IP + URL' }[t] || (t || '-');
+    },
+    /* 匹配条件摘要：空=无条件（对该维度全部请求限速）；否则"N 条件"，多组追加"M 组" */
+    condSummary(r) {
+      try {
+        const a = JSON.parse(r.conditions || '[]');
+        if (!Array.isArray(a) || !a.length) return '';
+        let n = 0;
+        a.forEach(g => { if (g && Array.isArray(g.conditions)) n += g.conditions.length; });
+        if (!n) return '';
+        return a.length > 1 ? `${n} 条件 / ${a.length} 组` : `${n} 条件`;
+      } catch (e) { return ''; }
+    },
+    actionMeta(a) { return this.actionMap[a] || this.actionMap.observe; },
+    load() {
+      App.api.cc.list(1, 1000, this.filterSite || 0).then(({ list }) => {
+        this.list = list || [];
+      }).catch(() => {});
+    },
+    loadStats() {
+      App.api.attackLog.stats(this.filterSite || 0, '24h').then((d) => {
+        this.statTrigger = (d && d.cc_blocked) || 0;
+      }).catch(() => {});
+    },
+    onFilterChange() {
+      this.page = 1;
+      this.load();
+      this.loadStats();
+    },
+    goPage(p) { this.page = p; },
+    toggleStatus(r, checked) {
+      const v = checked ? 1 : 0;
+      // conditions/logic 必须原样回传：后端 Save 全量覆盖保存，漏传会把已配置的条件抹掉
+      App.api.cc.save({
+        id: r.id, site_id: r.site_id, name: r.name, target: r.target,
+        conditions: r.conditions || '', logic: r.logic || '',
+        threshold: r.threshold, window: r.window, action: r.action,
+        redirect_url: r.redirect_url || '',
+        status: v
+      }).then(() => {
+        r.status = v;
+        ElementPlus.ElMessage.success(`规则 ${r.name} 已${v === 1 ? '启用' : '禁用'}`);
+      }).catch(() => {});
+    },
+    /* el-table 行事件委托：由事件目标所在 tr 的行序映射回数据行 */
+    rowFromEvent(e) {
+      const tr = e.target.closest('tr');
+      if (!tr || tr.parentNode.tagName !== 'TBODY') return null;
+      const idx = Array.prototype.indexOf.call(tr.parentNode.children, tr);
+      return this.paged[idx] || null;
+    },
+    /* 仅从拖拽手柄发起拖拽 */
+    rowMouseDown(r, e) {
+      const tr = e.target.closest('tr');
+      if (tr) tr.draggable = !!e.target.closest('.drag-handle');
+    },
+    dragStart(e) {
+      const r = this.rowFromEvent(e);
+      if (!r) return;
+      this.dragId = r.id;
+      e.dataTransfer.effectAllowed = 'move';
+    },
+    dragEnd(e) {
+      const tr = e.target.closest('tr');
+      if (tr) tr.draggable = false;
+      this.dragId = null;
+      this.dragOverId = null;
+    },
+    dragOver(e) {
+      const r = this.rowFromEvent(e);
+      if (r && r.id !== this.dragId) this.dragOverId = r.id;
+    },
+    drop(e) {
+      const r = this.rowFromEvent(e);
+      if (r && this.dragId && r.id !== this.dragId) {
+        const list = this.list.slice();
+        const from = list.findIndex(x => x.id === this.dragId);
+        const to = list.findIndex(x => x.id === r.id);
+        if (from !== -1 && to !== -1) {
+          const [moved] = list.splice(from, 1);
+          list.splice(to, 0, moved);
+          this.list = list;
+          App.api.cc.sort(list.map(x => x.id)).then(() => ElementPlus.ElMessage.success('排序已更新')).catch(() => {});
+        }
+      }
+      this.dragId = null;
+      this.dragOverId = null;
+    },
+    openAdd() {
+      DialogBridge.open({
+        id: 'cc_edit',
+        title: '新增规则',
+        url: '/cc/add.html?site_id=' + (this.filterSite || 0),
+        width: '640px',
+        height: 720
+      });
+    },
+    openEdit(row) {
+      DialogBridge.open({
+        id: 'cc_edit',
+        title: '编辑规则',
+        url: '/cc/add.html?id=' + row.id,
+        width: '640px',
+        height: 720
+      });
+    },
+    openDel(r) { this.delModal = { show: true, id: r.id, name: r.name }; },
+    closeDelModal() { this.delModal.show = false; },
+    confirmDel() {
+      App.api.cc.remove(this.delModal.id).then(() => {
+        ElementPlus.ElMessage.success('规则已删除');
+        this.delModal.show = false;
+        this.load();
+      }).catch(() => {});
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

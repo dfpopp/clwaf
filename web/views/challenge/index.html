@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>人机验证</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ============================================================
+       人机验证页面样式（1:1 对齐 UI/challenge）
+       ============================================================ */
+    html, body { height: 100%; }
+    #app { height: 100%; }
+    .page-container { height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box; background: var(--content-gradient), var(--bg-body); }
+    .page-container::-webkit-scrollbar { width: 6px; }
+    .page-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+    /* ===== 弹窗 ===== */
+    .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); width: 520px; max-width: 92%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); animation: modalIn 0.2s ease; }
+    @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+    .modal-title .modal-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .modal-icon.icon-blue { background: var(--accent-soft); color: var(--accent); }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: var(--text-primary); }
+    .modal-body { padding: 18px 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 18px; border-top: 1px solid var(--border); }
+    .detail-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 16px; }
+    .detail-list > div { display: flex; flex-direction: column; gap: 3px; }
+    .detail-list > div.full { grid-column: 1 / -1; }
+    .detail-list dt { font-size: 11px; color: var(--text-muted); }
+    .detail-list dd { font-size: 13px; color: var(--text-primary); word-break: break-all; }
+    .json-block { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; line-height: 1.5; }
+
+    /* 状态 */
+    .status-pass { color: var(--success); }
+    .status-fail { color: var(--danger); }
+    .status-pending { color: var(--warning); }
+
+    @media (max-width: 768px) { .detail-list { grid-template-columns: 1fr; } }
+  .cell-url { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; color: var(--text-muted); font-family: "SF Mono", Consolas, monospace; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="page-container">
+    <!-- 筛选栏 -->
+    <div class="filter-bar">
+      <div class="filter-left">
+        <el-select v-model="f.site_id" style="width:180px;flex:0 0 auto;" placeholder="全部站点" clearable @change="onFilterChange">
+          <el-option label="全部站点" :value="''"></el-option>
+          <el-option v-for="s in sites" :key="s.id" :label="s.name" :value="s.id"></el-option>
+        </el-select>
+        <el-select v-model="f.status" style="width:140px;flex:0 0 auto;" placeholder="全部状态" clearable @change="onFilterChange">
+          <el-option label="全部状态" :value="''"></el-option>
+          <el-option label="通过" value="pass"></el-option>
+          <el-option label="不通过" value="fail"></el-option>
+          <el-option label="待验证" value="pending"></el-option>
+        </el-select>
+        <el-select v-model="f.challenge_type" style="width:160px;flex:0 0 auto;" placeholder="全部验证类型" clearable @change="onFilterChange">
+          <el-option label="全部验证类型" :value="''"></el-option>
+          <el-option v-for="o in challengeOptions" :key="o.value" :value="o.value" :label="o.label"></el-option>
+        </el-select>
+        <el-select v-model="f.is_api" style="width:140px;flex:0 0 auto;" placeholder="接口类型" clearable @change="onFilterChange">
+          <el-option label="全部接口" :value="''"></el-option>
+          <el-option label="API接口" value="1"></el-option>
+          <el-option label="Web页面" value="0"></el-option>
+        </el-select>
+        <el-input v-model="f.ip" placeholder="搜索完整 IP" style="width:180px;" @keyup.enter="load()"></el-input>
+        <el-input v-model="f.req_id" placeholder="搜索 请求ID" style="width:220px;" @keyup.enter="load()"></el-input>
+        <el-date-picker v-model="range" type="datetimerange" range-separator="~" start-placeholder="开始时间" end-placeholder="结束时间"
+          value-format="YYYY-MM-DD HH:mm:ss" :clearable="true" style="width:360px;flex:0 0 auto;" @change="onRangeChange" @clear="onRangeClear"></el-date-picker>
+        <el-button @click="load()"><i class="fa-solid fa-magnifying-glass"></i> 查询</el-button>
+      </div>
+    </div>
+
+    <!-- 挑战记录列表 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fa-solid fa-user-check"></i> 挑战记录</span>
+        <span class="card-extra"><i class="fa-regular fa-clock"></i> {{ (range && range[0]) || '-' }} ~ {{ (range && range[1]) || '-' }}</span>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div class="table-wrap">
+          <el-table :data="paged" style="width:100%" empty-text="暂无挑战记录">
+            <el-table-column label="客户端 IP" min-width="130">
+              <template #default="{ row }"><span class="mono" style="color:var(--text-primary);">{{ row.client_ip || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="请求ID" min-width="160">
+              <template #default="{ row }"><span class="cell-url" :title="row.req_id || ''">{{ row.req_id || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="请求URL" min-width="180">
+              <template #default="{ row }"><span class="cell-url" :title="row.url || ''">{{ row.url || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="站点" min-width="110">
+              <template #default="{ row }">{{ siteName(row.site_id) }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }"><span :class="statusClass(row.status)"><i class="fa-solid" :class="statusIcon(row.status)"></i> {{ statusLabel(row.status) }}</span></template>
+            </el-table-column>
+            <el-table-column label="验证类型" width="110">
+              <template #default="{ row }">{{ typeLabel(row.challenge_type) }}</template>
+            </el-table-column>
+            <el-table-column label="接口类型" width="95">
+              <template #default="{ row }"><span class="tag" :class="row.is_api === 1 ? 'tag-info' : 'tag-neutral'">{{ row.is_api === 1 ? 'API接口' : 'Web页面' }}</span></template>
+            </el-table-column>
+            <el-table-column label="开始时间" width="160">
+              <template #default="{ row }"><span style="color:var(--text-muted);">{{ row.create_time || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="持续时间" width="95">
+              <template #default="{ row }">{{ duration(row) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="95" fixed="right">
+              <template #default="{ row }"><el-button size="small" @click="openDetail(row)"><i class="fa-solid fa-circle-info"></i> 详情</el-button></template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <!-- 分页 -->
+        <div class="pagination">
+          <el-button size="small" :disabled="!hasPrev" @click="goPrev"><i class="fa-solid fa-angle-left"></i> 上一页</el-button>
+          <el-button size="small" :disabled="!hasNext" @click="goNext">下一页 <i class="fa-solid fa-angle-right"></i></el-button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 详情为独立页面，见 challenge/detail.html（由 DialogBridge 以弹窗打开） -->
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      f: { site_id: '', status: '', challenge_type: '', is_api: '', ip: '', req_id: '' },
+      challengeOptions: [
+        { value: 'silent_challenge', label: 'JS静默验证' },
+        { value: 'slider', label: '滑块验证' },
+        { value: 'captcha', label: '图形验证码' },
+        { value: 'puzzle', label: '拼图验证' }
+      ],
+      sites: [],
+      list: [], pageSize: 15,
+      range: [],
+      hasPrev: false, hasNext: false,
+      first: { ct: '', id: 0 }, last: { ct: '', id: 0 }
+    };
+  },
+  computed: {
+    paged() { return this.list; }
+  },
+  mounted() {
+    ThemeManager.init();
+    this.setDefaultRange();
+    App.api.site.list(1, 100).then(({ list }) => {
+      this.sites = list || [];
+    }).then(() => this.load()).catch(() => {});
+    window.onSearch = () => this.load();
+  },
+  methods: {
+    siteName(id) { return App.ui.siteName(this.sites, id); },
+    statusLabel(s) { return App.ui.challengeStatusLabel(s); },
+    statusClass(s) { return App.ui.challengeStatusClass(s); },
+    statusIcon(s) { return App.ui.challengeStatusIcon(s); },
+    typeLabel(t) { return App.ui.challengeTypeLabel(t); },
+    duration(row) { return App.ui.challengeDuration(row); },
+    load(dir) {
+      const p = { page_size: this.pageSize };
+      if (this.range && this.range.length === 2) {
+        p.start_time = this.range[0];
+        p.end_time = this.range[1];
+      }
+      if (dir === 'next') {
+        p.direction = 'next';
+        p.cursor_ct = this.last.ct;
+        p.cursor_id = this.last.id;
+      } else if (dir === 'prev') {
+        p.direction = 'prev';
+        p.cursor_ct = this.first.ct;
+        p.cursor_id = this.first.id;
+      }
+      if (this.f.site_id) p.site_id = this.f.site_id;
+      if (this.f.status) p.status = this.f.status;
+      if (this.f.challenge_type) p.challenge_type = this.f.challenge_type;
+      if (this.f.is_api !== '' && this.f.is_api !== null && this.f.is_api !== undefined) p.is_api = this.f.is_api;
+      if (this.f.ip) p.client_ip = String(this.f.ip).trim();
+      if (this.f.req_id) p.req_id = String(this.f.req_id).trim();
+      App.api.challenge.records(p).then((res) => {
+        this.list = res.list || [];
+        this.hasPrev = !!res.has_prev;
+        this.hasNext = !!res.has_next;
+        this.first = { ct: res.first_ct || '', id: res.first_id || 0 };
+        this.last = { ct: res.last_ct || '', id: res.last_id || 0 };
+      }).catch(() => {});
+    },
+    pad2(n) { return String(n).padStart(2, '0'); },
+    fmtTS(d) {
+      return d.getFullYear() + '-' + this.pad2(d.getMonth() + 1) + '-' + this.pad2(d.getDate())
+        + ' ' + this.pad2(d.getHours()) + ':' + this.pad2(d.getMinutes()) + ':' + this.pad2(d.getSeconds());
+    },
+    setDefaultRange() {
+      const now = new Date();
+      this.range = [this.fmtTS(new Date(now.getTime() - 24 * 3600 * 1000)), this.fmtTS(now)];
+    },
+    onRangeChange() {
+      if (this.range && this.range.length === 2) {
+        const s = new Date(this.range[0].replace(' ', 'T')).getTime();
+        const e = new Date(this.range[1].replace(' ', 'T')).getTime();
+        if (e - s > 24 * 3600 * 1000) { this.setDefaultRange(); this.load(); return; }
+      } else {
+        this.setDefaultRange();
+      }
+      this.load();
+    },
+    onRangeClear() {
+      // 清空时间 → 回到当前 24 小时
+      this.setDefaultRange();
+      this.load();
+    },
+    onFilterChange() { this.load(); },
+    goNext() { if (this.hasNext) this.load('next'); },
+    goPrev() { if (this.hasPrev) this.load('prev'); },
+    /* 详情：以 iframe 弹窗打开独立页面（DialogBridge），关闭由子页面回调 */
+    openDetail(row) {
+      let url = '/challenge/detail.html?req_id=' + encodeURIComponent(row.req_id || '');
+      if (this.range && this.range.length === 2) {
+        url += '&start_time=' + encodeURIComponent(this.range[0]) + '&end_time=' + encodeURIComponent(this.range[1]);
+      }
+      DialogBridge.open({ id: 'ch_detail', title: '挑战详情', url: url, width: '480px', height: 620 });
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

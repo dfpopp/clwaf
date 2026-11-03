@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>安全验证</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(135deg,#0d1218,#151b24);color:#e6edf3;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{max-width:400px;width:100%;text-align:center}
+.icon{width:64px;height:64px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+h1{font-size:20px;margin-bottom:10px;font-weight:700}
+.desc{color:#8b98a9;line-height:1.7;margin-bottom:18px;font-size:13px}
+.msg{min-height:18px;font-size:12px;color:#f87171;margin-bottom:10px}
+.msg.ok{color:#4ade80}
+.info{background:rgba(255,255,255,0.03);border:1px solid #232c38;border-radius:10px;padding:14px 18px;margin-bottom:16px;text-align:left}
+.row{display:flex;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.row:last-child{border-bottom:0}
+.row .k{color:#5c6b7d}
+.row .v{color:#e6edf3;font-family:Consolas,monospace;text-align:right}
+.tip{font-size:12px;color:#5c6b7d}
+.tip code{font-family:Consolas,monospace;color:#8b98a9}
+.logo{text-align:center;margin-bottom:16px}.logo img{max-width:120px;max-height:48px;border-radius:4px}
+.box{max-width:360px}
+.spin{width:56px;height:56px;margin:0 auto 18px;border:3px solid rgba(251,191,36,0.15);border-top-color:#fbbf24;border-radius:50%;animation:rot 1s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.okmark{display:none;width:56px;height:56px;margin:0 auto 18px;border-radius:50%;background:rgba(34,197,94,0.15);align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="spin" id="spin"></div>
+  <div class="okmark" id="okMark"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+  {{if .LogoURL}}<div class="logo"><img src="{{.LogoURL}}" alt="logo"></div>{{end}}
+  <h1 id="title">正在安全验证</h1>
+  <p class="desc" id="desc">请稍候，系统正在验证您的浏览器环境...</p>
+  <div class="info">
+    <div class="row"><span class="k">站点名称</span><span class="v">{{.SiteName}}</span></div>
+    <div class="row"><span class="k">触发时间</span><span class="v">{{.Time}}</span></div>
+  </div>
+  <div class="tip">客户端IP：<code>{{.ClientIP}}</code> · 请求编号：<code>{{.RequestID}}</code></div>
+  <!-- 加载缓慢提示：老设备/网络差时资源加载慢一直被转圈，易被误当成"WAF挂了"。满6秒仍未完成验证就亮出该卡片。
+       主题自适应：改下方 --sh-* 三个变量即可适配浅色/深色模板（琥珀色强调在明暗背景下均清晰）。
+       仅改显示，不影响主验证流程；验证通过 $ok() 会把 #spin 隐藏，此卡片不会出现。#slowHint 默认隐藏。 -->
+  <style>
+  .slowhint{--sh-bg:rgba(251,191,36,.08);--sh-hi:#fbbf24;--sh-ln:rgba(251,191,36,.4);display:none;align-items:flex-start;gap:10px;text-align:left;margin:0 0 16px;padding:12px 14px 12px 11px;background:var(--sh-bg);border:1px solid var(--sh-ln);border-left:3px solid var(--sh-hi);border-radius:8px;animation:shp 1.6s ease-in-out infinite}
+  .slowhint.on{display:flex}
+  @keyframes shp{0%,100%{border-color:var(--sh-ln);box-shadow:0 0 0 0 rgba(251,191,36,0)}50%{border-color:var(--sh-hi);box-shadow:0 0 0 3px rgba(251,191,36,.14)}}
+  .slowhint-ic{flex:0 0 auto;width:20px;height:20px;margin-top:1px;border-radius:50%;background:var(--sh-hi);color:#1b2128;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .slowhint-t{font-weight:600;font-size:13px;color:inherit;margin-bottom:2px}
+  .slowhint-d{font-size:12px;color:inherit;opacity:.75;line-height:1.6}
+  </style>
+  <div class="slowhint" id="slowHint">
+    <span class="slowhint-ic">!</span>
+    <div>
+      <div class="slowhint-t">检测到加载缓慢</div>
+      <div class="slowhint-d">当前网络较差，或设备 CPU、内存占用较高，导致验证资源加载缓慢。若长时间无法通过，请手动刷新页面后再试。</div>
+    </div>
+  </div>
+  <script>
+  (function(){try{var s=document.getElementById('spin'),h=document.getElementById('slowHint');if(!s||!h)return;window.setTimeout(function(){try{if(getComputedStyle(s).display==='none')return;h.className='slowhint on';}catch(e){}},6000);}catch(e){}})();
+  </script>
+</div>
+<script>
+window.__APP = {
+  a: '{{.ChallengeID}}',
+  b: '{{.Nonce}}',
+  p: { h:'{{.PoWChallenge}}', b:{{.PoWDifficulty}} },
+  u: '{{.WafUrlPrefix}}',
+};
+</script>
+<script>
+(function () {
+  var app = window.__APP;
+  var q='?reqID='+encodeURIComponent((app&&app.a)||'')+'&v='+Math.floor(Math.random()*99999);
+  var s=document.createElement('script');
+  s.src='/'+(app&&app.u||'waf')+'/assets/tongji/1.js'+q;
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>

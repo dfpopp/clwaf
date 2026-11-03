@@ -1,0 +1,30 @@
+{
+  "waf": {
+    "name": "waf",
+    "env": "prod",
+    "logger": {
+      "path": "runtime/log/engine"
+    }
+  },
+  "admin": {
+    "name": "admin",
+    "env": "dev",
+    "http": {
+      "addr": ":49463",
+      "read_timeout": 30,
+      "write_timeout": 60,
+      "idle_timeout": 60,
+      "max_header_bytes": 8192
+    },
+    "logger": {
+      "path": "runtime/log/admin"
+    }
+  },
+  "cron": {
+    "name": "cron",
+    "env": "dev",
+    "logger": {
+      "path": "runtime/log/cron"
+    }
+  }
+}

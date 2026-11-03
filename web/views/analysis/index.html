@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日志分析</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ===== ECharts 图表主题变量 ===== */
+    :root, [data-theme="dark"] {
+      --chart-tooltip-bg: #1a222e;
+      --chart-tooltip-border: #2a3542;
+      --chart-tooltip-text: #e6edf3;
+      --chart-axis-line: #2a3542;
+      --chart-split-line: #232c38;
+      --chart-axis-label: #5c6b7d;
+      --chart-legend-text: #8b98a9;
+      --chart-border-color: #151b24;
+      --chart-label-color: #8b98a9;
+    }
+    [data-theme="light"] {
+      --chart-tooltip-bg: #ffffff;
+      --chart-tooltip-border: #e2e8f0;
+      --chart-tooltip-text: #1e293b;
+      --chart-axis-line: #cbd5e1;
+      --chart-split-line: #f1f5f9;
+      --chart-axis-label: #94a3b8;
+      --chart-legend-text: #64748b;
+      --chart-border-color: #ffffff;
+      --chart-label-color: #64748b;
+    }
+
+    /* ===== 弹窗 ===== */
+    .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); width: 480px; max-width: 92%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); animation: modalIn 0.2s ease; }
+    .modal.wide { width: 620px; }
+    .modal.extra-wide { width: 860px; }
+    @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-title { font-size: 14px; font-weight: 600; flex: 1; }
+    .modal-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .modal-icon.icon-primary { background: var(--accent-soft); color: var(--accent); }
+    .modal-icon.icon-danger { background: rgba(239,68,68,0.12); color: var(--danger); }
+    .modal-icon.icon-teal { background: rgba(20,184,166,0.12); color: var(--teal); }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: var(--text-primary); }
+    .modal-body { padding: 18px 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+    .modal-body .highlight { color: var(--text-primary); font-weight: 600; font-family: "SF Mono", Consolas, monospace; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 18px; border-top: 1px solid var(--border); }
+
+    /* ===== 导入区 ===== */
+    .import-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+    .import-row .el-form-item { margin-bottom: 0; }
+    .import-row .date-input { position: relative; }
+    .import-row .date-input .date-ico { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 13px; }
+    .import-row input[type="date"] { padding-left: 36px; width: 170px; }
+    .import-hint { font-size: 12px; color: var(--text-muted); align-self: center; }
+    .import-actions { display: flex; gap: 10px; margin-left: auto; }
+    .hidden-file { display: none; }
+
+    /* ===== 批次总览 ===== */
+    .ov-head { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 14px; }
+    .ov-head .ov-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .ov-head .ov-title::before { content: ""; width: 3px; height: 16px; border-radius: 3px; background: var(--accent); }
+    .ov-head .ov-tag { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+    .ov-layout { display: flex; gap: 16px; align-items: stretch; }
+    .ov-main { flex: 1; min-width: 0; }
+    .ov-side { width: 340px; flex-shrink: 0; }
+    .ov-chart { width: 100%; height: 260px; }
+    @media (max-width: 1100px) { .ov-layout { flex-direction: column; } .ov-side { width: 100%; } }
+
+    /* ===== IP 分析 ===== */
+    .row-actions { display: inline-flex; gap: 6px; }
+    tbody tr.selected { background: var(--accent-soft); }
+    .ip-region { font-size: 11px; color: var(--text-muted); }
+    .cell-ip { font-family: "SF Mono", Consolas, monospace; color: var(--text-primary); font-weight: 600; }
+    .qps-high { color: var(--danger); font-weight: 600; }
+    .cell-ua { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
+    .th-input { width: 90px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 13px; font-family: var(--font); padding: 7px 10px; outline: none; }
+    .th-input:focus { border-color: var(--accent); }
+    .th-group { display: flex; align-items: center; gap: 6px; }
+    .th-label { font-size: 12px; color: var(--text-muted); }
+
+    /* ===== IP 详情弹窗 ===== */
+    .detail-badge { display: inline-flex; align-items: center; gap: 8px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; color: var(--text-secondary); }
+    .detail-badge b { color: var(--text-primary); font-family: "SF Mono", Consolas, monospace; }
+    .detail-chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+    .detail-chart { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+    .detail-chart .dc-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    .detail-chart .dc-body { height: 170px; }
+    .detail-chart .dc-body.line { height: 200px; }
+    .detail-chart.full { grid-column: 1 / -1; }
+    @media (max-width: 768px) { .detail-chart-grid { grid-template-columns: 1fr; } .modal.extra-wide { width: 100%; } }
+
+    /* ===== IP 组标签 ===== */
+    .ip-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-soft); color: var(--accent); padding: 3px 10px; border-radius: 6px; font-size: 12px; font-family: "SF Mono", Consolas, monospace; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="layout">
+    <div class="main">
+      <div class="content">
+        <div class="section-title">日志分析<span class="sub">导入原始请求日志，在线研判 IP 行为，可一键加入 IP 组</span></div>
+
+        <!-- 日志导入 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><el-icon :size="14" style="color:var(--accent);margin-right:6px;"><component :is="'UploadFilled'"/></el-icon>日志导入</span>
+            <span class="card-extra">支持按时间段从本机磁盘导入或上传文件</span>
+          </div>
+          <div class="card-body">
+            <el-form class="import-row" :model="{}" label-position="top" @submit.prevent="doImport">
+              <el-form-item label="开始日期">
+                <el-date-picker v-model="importStart" type="date" value-format="YYYY-MM-DD" placeholder="开始日期" style="width:170px;"></el-date-picker>
+              </el-form-item>
+              <el-form-item label="结束日期">
+                <el-date-picker v-model="importEnd" type="date" value-format="YYYY-MM-DD" placeholder="结束日期" style="width:170px;"></el-date-picker>
+              </el-form-item>
+              <span class="import-hint"><el-icon :size="12" style="vertical-align:-2px;"><component :is="'InfoFilled'"/></el-icon> 读取 runtime/data/access/ 目录下对应日期的原始日志</span>
+              <div class="import-actions">
+                <el-button @click="fileInputClick"><el-icon :size="13"><component :is="'Upload'"/></el-icon> 上传文件</el-button>
+                <input ref="fileInput" type="file" class="hidden-file" accept=".log,.json" @change="onFileChange">
+                <el-button type="primary" :disabled="importing" @click="doImport"><el-icon :size="13"><component :is="'Files'"/></el-icon> 按时间段导入</el-button>
+              </div>
+            </el-form>
+          </div>
+        </div>
+
+        <!-- 导入批次 -->
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header">
+            <span class="card-title">导入批次</span>
+            <span class="card-extra">点击"分析"查看该批次研判结果</span>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrap">
+              <el-table :data="batches" row-key="id" style="width:100%;" :row-class-name="({ row }) => (currentBatch && currentBatch.id === row.id) ? 'selected' : ''">
+                <template #empty><div class="empty-state"><el-icon :size="36"><component :is="'FolderOpened'"/></el-icon><div>暂无导入批次</div></div></template>
+                <el-table-column label="批次号" width="90">
+                  <template #default="{ row }"><span class="mono">#{{ row.id }}</span></template>
+                </el-table-column>
+                <el-table-column label="来源" width="110">
+                  <template #default="{ row }">{{ sourceLabel(row.source) }}</template>
+                </el-table-column>
+                <el-table-column label="时间范围" min-width="180">
+                  <template #default="{ row }">{{ rangeText(row) }}</template>
+                </el-table-column>
+                <el-table-column label="总请求数" min-width="100">
+                  <template #default="{ row }">{{ row.total_reqs != null ? row.total_reqs.toLocaleString() : '-' }}</template>
+                </el-table-column>
+                <el-table-column label="IP 数" width="80">
+                  <template #default="{ row }">{{ row.total_ips }}</template>
+                </el-table-column>
+                <el-table-column label="状态" width="90">
+                  <template #default="{ row }"><span class="tag" :class="statusInfo(row.status)[1]">{{ statusInfo(row.status)[0] }}</span></template>
+                </el-table-column>
+                <el-table-column label="导入时间" min-width="160">
+                  <template #default="{ row }"><span style="color:var(--text-muted);">{{ row.create_time }}</span></template>
+                </el-table-column>
+                <el-table-column label="操作" width="160" fixed="right">
+                  <template #default="{ row }">
+                    <div class="row-actions">
+                      <el-button size="small" :disabled="row.status !== 'completed'" @click="selectBatch(row)"><el-icon :size="12"><component :is="'DataAnalysis'"/></el-icon> 分析</el-button>
+                      <el-button size="small" type="danger" @click="openDelBatch(row)"><el-icon :size="12"><component :is="'Delete'"/></el-icon> 删除</el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:10px;">
+              <el-pagination
+                background
+                layout="prev, pager, next, total"
+                :total="batchTotal"
+                :page-size="batchPageSize"
+                :current-page="batchPage"
+                @current-change="goBatch">
+              </el-pagination>
+              <el-button type="danger" size="small" :disabled="!currentBatch" @click="openDelBatch(currentBatch)"><el-icon :size="12"><component :is="'Delete'"/></el-icon> 删除当前批次</el-button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 批次总览 -->
+        <div v-if="currentBatch">
+          <div class="ov-head">
+            <div class="ov-title">批次总览 <span class="ov-tag">{{ currentBatch.id }} · {{ rangeText(currentBatch) }} · {{ sourceLabel(currentBatch.source) }}</span></div>
+            <el-button size="small" @click="exportCsv"><el-icon :size="12"><component :is="'Download'"/></el-icon> 导出CSV</el-button>
+          </div>
+          <div class="stat-grid cols-4" style="margin-bottom:14px;">
+            <div class="stat-card">
+              <div class="stat-top"><span class="stat-label">总请求数</span><div class="stat-icon icon-blue"><el-icon :size="14"><component :is="'DataLine'"/></el-icon></div></div>
+              <div class="stat-value">{{ fmtOv(currentBatch.total_reqs) }}</div>
+              <div class="stat-change">有效请求行总数</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-top"><span class="stat-label">独立 IP</span><div class="stat-icon icon-cyan"><el-icon :size="14"><component :is="'Monitor'"/></el-icon></div></div>
+              <div class="stat-value">{{ currentBatch.total_ips }}</div>
+              <div class="stat-change">去重后客户端 IP 数</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-top"><span class="stat-label">来源</span><div class="stat-icon icon-purple"><el-icon :size="14"><component :is="'Files'"/></el-icon></div></div>
+              <div class="stat-value" style="font-size:18px;">{{ sourceLabel(currentBatch.source) }}</div>
+              <div class="stat-change">数据导入方式</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-top"><span class="stat-label">状态</span><div class="stat-icon icon-green"><el-icon :size="14"><component :is="'CircleCheck'"/></el-icon></div></div>
+              <div class="stat-value" style="font-size:18px;">{{ statusInfo(currentBatch.status)[0] }}</div>
+              <div class="stat-change">批次处理状态</div>
+            </div>
+          </div>
+          <div class="ov-layout">
+            <div class="card ov-main">
+              <div class="card-header"><span class="card-title">请求量 TOP IP</span><span class="card-extra">按总请求数排序</span></div>
+              <div class="card-body"><div class="ov-chart" id="ipReqChart"></div></div>
+            </div>
+            <div class="card ov-side">
+              <div class="card-header"><span class="card-title">拦截量 TOP IP</span><span class="card-extra">按拦截数排序</span></div>
+              <div class="card-body"><div class="ov-chart" id="ipBlockChart"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- IP 分析 -->
+        <div v-if="currentBatch">
+          <div class="ov-head">
+            <div class="ov-title">IP 分析 <span style="font-size:12px;color:var(--text-muted);font-weight:400;margin-left:4px;">按请求频率研判，可加入 IP 组</span></div>
+            <el-button size="small" type="primary" @click="batchAddGroup"><el-icon :size="12"><component :is="'Collection'"/></el-icon> 勾选IP加入IP组</el-button>
+          </div>
+          <div class="card">
+            <div class="card-body" style="padding:14px 20px;">
+              <div class="toolbar" style="margin-bottom:0;">
+                <div class="toolbar-left">
+                  <div class="th-group">
+                    <span class="th-label">最大QPS≥</span>
+                    <el-input v-model="thQps" placeholder="不限" style="width:100px;" @change="applyFilter"></el-input>
+                  </div>
+                  <div class="th-group">
+                    <span class="th-label">总请求数≥</span>
+                    <el-input v-model="thReq" placeholder="不限" style="width:100px;" @change="applyFilter"></el-input>
+                  </div>
+                  <el-select v-model="sortBy" style="width:130px;" @change="applyFilter">
+                    <el-option value="req" label="按总请求数排序"></el-option>
+                    <el-option value="qps" label="按QPS排序"></el-option>
+                    <el-option value="block" label="按拦截数排序"></el-option>
+                  </el-select>
+                  <el-input v-model="keyword" placeholder="搜索IP/归属地" style="width:200px;" @keyup.enter="applyFilter">
+                    <template #prefix><el-icon :size="13"><component :is="'Search'"/></el-icon></template>
+                  </el-input>
+                </div>
+                <div class="toolbar-right">
+                  <el-button size="small" @click="resetFilter"><el-icon :size="12"><component :is="'RefreshLeft'"/></el-icon> 重置筛选</el-button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <div class="card-body" style="padding:0;">
+              <div class="table-wrap">
+                <el-table :data="curIps" row-key="ip" style="width:100%;">
+                  <template #empty><div class="empty-state"><el-icon :size="36"><component :is="'Filter'"/></el-icon><div>当前条件下无符合条件的 IP</div></div></template>
+                  <el-table-column width="46" align="center">
+                    <template #header><el-checkbox :model-value="pageChecked" @change="v => toggleAll({ target: { checked: v } })"></el-checkbox></template>
+                    <template #default="{ row }"><el-checkbox :model-value="selectedIps.has(row.ip)" @change="v => toggleIp(row, { target: { checked: v } })"></el-checkbox></template>
+                  </el-table-column>
+                  <el-table-column label="归属地" min-width="200">
+                    <template #default="{ row }"><span class="ip-region">{{ row.region_full || '-' }}</span></template>
+                  </el-table-column>
+                  <el-table-column label="IP" min-width="150">
+                    <template #default="{ row }"><span class="cell-ip">{{ row.ip }}</span></template>
+                  </el-table-column>
+                  <el-table-column label="总请求数" width="100">
+                    <template #default="{ row }"><span style="color:var(--text-primary);">{{ row.req_count }}</span></template>
+                  </el-table-column>
+                  <el-table-column label="拦截数" width="90">
+                    <template #default="{ row }"><span v-if="row.block_count" style="color:var(--danger);">{{ row.block_count }}</span><span v-else>-</span></template>
+                  </el-table-column>
+                  <el-table-column label="QPS" width="90">
+                    <template #default="{ row }"><span :class="{ 'qps-high': Number(row.qps) >= 50 }">{{ Number(row.qps).toFixed(2) }}</span></template>
+                  </el-table-column>
+                  <el-table-column label="UA" min-width="200" show-overflow-tooltip>
+                    <template #default="{ row }"><span class="cell-ua mono" :title="row.ua || ''">{{ row.ua || '-' }}</span></template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="160" fixed="right">
+                    <template #default="{ row }">
+                      <div class="row-actions">
+                        <el-button size="small" @click="openDetail(row)"><el-icon :size="12"><component :is="'View'"/></el-icon> 详情</el-button>
+                        <el-button size="small" @click="openGroupModal([row.ip])"><el-icon :size="12"><component :is="'Collection'"/></el-icon> 加组</el-button>
+                      </div>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+              <el-pagination
+                background
+                layout="prev, pager, next, total"
+                :total="ipTotal"
+                :page-size="ipPageSize"
+                :current-page="ipPage"
+                @current-change="goIpPage">
+              </el-pagination>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== IP 详情弹窗 ===== -->
+  <div class="modal-mask" v-show="detail.visible" @click.self="detail.visible = false">
+    <div class="modal extra-wide">
+      <div class="modal-header">
+        <div class="modal-icon icon-primary"><el-icon :size="14"><component :is="'Monitor'"/></el-icon></div>
+        <span class="modal-title">IP 研判详情 <span style="font-family:'SF Mono',Consolas,monospace;color:var(--accent);">{{ detail.row ? detail.row.ip : '' }}</span></span>
+        <button class="modal-close" @click="detail.visible = false"><el-icon><component :is="'Close'"/></el-icon></button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+          <span class="detail-badge">归属地 <b>{{ detail.row ? (detail.row.region_full || '-') : '-' }}</b></span>
+          <span class="detail-badge">总请求 <b>{{ detail.row ? detail.row.req_count : '-' }}</b></span>
+          <span class="detail-badge">拦截 <b>{{ detail.row ? detail.row.block_count : '-' }}</b></span>
+          <span class="detail-badge">QPS <b>{{ detail.row ? Number(detail.row.qps).toFixed(2) : '-' }}</b></span>
+        </div>
+
+        <div class="detail-chart-grid">
+          <div class="detail-chart">
+            <div class="dc-title"><el-icon :size="12" style="color:var(--accent);"><component :is="'Rank'"/></el-icon>访问 URI TOP</div>
+            <div class="dc-body" id="dUriChart"></div>
+          </div>
+          <div class="detail-chart">
+            <div class="dc-title"><el-icon :size="12" style="color:var(--danger);"><component :is="'Code'"/></el-icon>请求方法分布</div>
+            <div class="dc-body" id="dMethodChart"></div>
+          </div>
+          <div class="detail-chart">
+            <div class="dc-title"><el-icon :size="12" style="color:var(--warning);"><component :is="'DataLine'"/></el-icon>状态码分布</div>
+            <div class="dc-body" id="dStatusChart"></div>
+          </div>
+          <div class="detail-chart">
+            <div class="dc-title"><el-icon :size="12" style="color:var(--purple);"><component :is="'Monitor'"/></el-icon>UA 类型分布</div>
+            <div class="dc-body" id="dUaChart"></div>
+          </div>
+          <div class="detail-chart full">
+            <div class="dc-title"><el-icon :size="12" style="color:var(--cyan);"><component :is="'Timer'"/></el-icon>请求小时分布</div>
+            <div class="dc-body line" id="dHourChart"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-top:16px;font-size:14px;font-weight:600;color:var(--text-primary);">
+          <el-icon :size="14"><component :is="'List'"/></el-icon> 请求明细
+        </div>
+        <div class="table-wrap">
+          <el-table :data="detail.list" style="width:100%;margin-top:10px;">
+            <template #empty><div class="empty-state" style="padding:20px;"><el-icon :size="30"><component :is="'FolderOpened'"/></el-icon><div>暂无请求明细</div></div></template>
+            <el-table-column label="时间" min-width="160">
+              <template #default="{ row }"><span style="color:var(--text-muted);">{{ row.ts }}</span></template>
+            </el-table-column>
+            <el-table-column label="方法" width="90">
+              <template #default="{ row }">{{ row.method || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="URI" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }"><span class="mono">{{ row.uri || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="状态码" width="90">
+              <template #default="{ row }"><span class="tag" :class="statusCls(row.status)">{{ row.status || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="是否拦截" width="90">
+              <template #default="{ row }"><span v-if="row.blocked" style="color:var(--danger);">拦截</span><span v-else style="color:var(--text-muted);">-</span></template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <el-pagination
+          background
+          layout="prev, pager, next, total"
+          :total="detail.total"
+          :page-size="detail.pageSize"
+          :current-page="detail.page"
+          @current-change="goDetailPage">
+        </el-pagination>
+      </div>
+      <div class="modal-footer">
+        <el-button type="primary" @click="detailAddGroup"><el-icon :size="13"><component :is="'Collection'"/></el-icon> 加入IP组</el-button>
+        <el-button @click="detail.visible = false">关闭</el-button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 加入 IP 组弹窗 ===== -->
+  <div class="modal-mask" v-show="groupModal.show" @click.self="groupModal.show = false">
+    <div class="modal wide">
+      <div class="modal-header">
+        <div class="modal-icon icon-teal"><el-icon :size="14"><component :is="'Collection'"/></el-icon></div>
+        <span class="modal-title">将 IP 加入 IP 组</span>
+        <button class="modal-close" @click="groupModal.show = false"><el-icon><component :is="'Close'"/></el-icon></button>
+      </div>
+      <div class="modal-body">
+        <el-form :model="{}" label-position="top" @submit.prevent="confirmGroup">
+          <el-form-item label="选择 IP 组">
+            <el-select v-model="groupModal.groupId" placeholder="-- 请选择已有 IP 组 --" clearable style="width:100%;">
+              <el-option value="new" label="＋ 新建 IP 组"></el-option>
+              <el-option v-for="g in groups" :key="g.id" :value="g.id" :label="g.name + '（' + groupCount(g) + ' 个IP）'"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="新 IP 组名称 *" v-show="groupModal.groupId === 'new'">
+            <el-input v-model="groupModal.newName" placeholder="如：疑似采集IP"></el-input>
+            <div class="form-hint">创建后自动加入所选 IP，可立即被黑白名单/CC/自定义规则引用</div>
+          </el-form-item>
+          <el-form-item>
+            <template #label>将加入的 IP（共 <span style="color:var(--accent);font-weight:600;">{{ groupModal.ips.length }}</span> 个）</template>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              <span class="ip-tag" v-for="ip in groupModal.ips" :key="ip">{{ ip }}</span>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <div class="modal-footer">
+        <el-button @click="groupModal.show = false">取消</el-button>
+        <el-button type="primary" :disabled="savingGroup" @click="confirmGroup"><el-icon :size="13"><component :is="'Check'"/></el-icon> 确认加入</el-button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 删除批次确认弹窗 ===== -->
+  <div class="modal-mask" v-show="delModal.show" @click.self="delModal.show = false">
+    <div class="modal" style="width:420px;">
+      <div class="modal-header">
+        <div class="modal-icon icon-danger"><el-icon :size="14"><component :is="'WarningFilled'"/></el-icon></div>
+        <span class="modal-title">删除导入批次</span>
+        <button class="modal-close" @click="delModal.show = false"><el-icon><component :is="'Close'"/></el-icon></button>
+      </div>
+      <div class="modal-body">确定要删除批次 <span class="highlight">{{ delModal.row ? ('#' + delModal.row.id) : '' }}</span> 吗？<br>该批次下所有 IP 聚合与明细数据将一并删除，且不可恢复。</div>
+      <div class="modal-footer">
+        <el-button @click="delModal.show = false">取消</el-button>
+        <el-button type="danger" @click="confirmDelBatch"><el-icon :size="13"><component :is="'Delete'"/></el-icon> 确认删除</el-button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/lib/echarts.min.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+function dateStr(offsetDays) {
+  const d = new Date();
+  d.setDate(d.getDate() - (offsetDays || 0));
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+const app = createApp({
+  data() {
+    return {
+      importStart: dateStr(1), importEnd: dateStr(0), importing: false,
+      batches: [], batchTotal: 0, batchPage: 1, batchPageSize: 10,
+      currentBatch: null,
+      ipList: [], ipTotal: 0, ipPage: 1, ipPageSize: 10,
+      keyword: '', sortBy: 'req', thQps: '', thReq: '',
+      reqTop: [], blockTop: [],
+      selectedIps: new Set(),
+      groups: [], savingGroup: false,
+      detail: { visible: false, row: null, list: [], total: 0, page: 1, pageSize: 10 },
+      groupModal: { show: false, ips: [], groupId: '', newName: '' },
+      delModal: { show: false, row: null },
+      charts: {}
+    };
+  },
+  computed: {
+    batchTotalPages() { return Math.max(1, Math.ceil(this.batchTotal / this.batchPageSize)); },
+    ipTotalPages() { return Math.max(1, Math.ceil(this.ipTotal / this.ipPageSize)); },
+    detailTotalPages() { return Math.max(1, Math.ceil(this.detail.total / this.detail.pageSize)); },
+    curIps() {
+      // 筛选/排序已于后端完成，此处直接返回当前页数据
+      return this.ipList.slice();
+    },
+    pageChecked() { return this.curIps.length > 0 && this.curIps.every(x => this.selectedIps.has(x.ip)); },
+    ipPageItems() {
+      const tp = this.ipTotalPages, cur = this.ipPage;
+      const items = [];
+      for (let i = 1; i <= tp; i++) {
+        if (i === 1 || i === tp || (i >= cur - 2 && i <= cur + 2)) items.push(i);
+        else if (items[items.length - 1] !== '...') items.push('...');
+      }
+      return items;
+    },
+    detailPageItems() {
+      const tp = this.detailTotalPages, cur = this.detail.page;
+      const items = [];
+      for (let i = 1; i <= tp; i++) {
+        if (i === 1 || i === tp || (i >= cur - 2 && i <= cur + 2)) items.push(i);
+        else if (items[items.length - 1] !== '...') items.push('...');
+      }
+      return items;
+    }
+  },
+  mounted() {
+    ThemeManager.init();
+    this.loadBatches();
+    window.addEventListener('resize', () => this.resizeCharts());
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.action === 'theme_change') this.$nextTick(() => this.renderAllCharts());
+    });
+  },
+  methods: {
+    /* ===== 工具 ===== */
+    fmtOv(n) { n = Number(n) || 0; if (n >= 10000) return (n / 10000).toFixed(1) + '万'; return n.toLocaleString(); },
+    sourceLabel(s) { return { disk: '磁盘导入', upload: '文件上传' }[s] || s || '-'; },
+    statusInfo(s) {
+      return { completed: ['完成', 'tag-success'], pending: ['待导入', 'tag-warning'], fail: ['失败', 'tag-danger'] }[s] || [s || '-', 'tag-other'];
+    },
+    rangeText(b) { return ((b.start_time || '-') + ' ~ ' + (b.end_time || '-')); },
+    statusCls(s) { return s >= 500 ? 'tag-danger' : (s >= 400 ? 'tag-warning' : 'tag-success'); },
+    groupCount(g) { return this.parseIps(g.ip_list).length; },
+
+    /* ===== 导入 ===== */
+    fileInputClick() { this.$refs.fileInput.click(); },
+    onFileChange(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      this.importing = true;
+      App.api.analysis.upload(file).then(() => {
+        ElementPlus.ElMessage.success('上传解析成功');
+        e.target.value = '';
+        this.loadBatches();
+      }).catch(() => {}).finally(() => { this.importing = false; });
+    },
+    doImport() {
+      if (!this.importStart || !this.importEnd || this.importEnd < this.importStart) {
+        ElementPlus.ElMessage.warning('请选择有效的日期范围');
+        return;
+      }
+      this.importing = true;
+      App.api.analysis.importDisk(this.importStart + ' 00:00:00', this.importEnd + ' 23:59:59').then(() => {
+        ElementPlus.ElMessage.success('导入成功');
+        this.loadBatches();
+      }).catch(() => {}).finally(() => { this.importing = false; });
+    },
+
+    /* ===== 批次 ===== */
+    loadBatches() {
+      App.api.analysis.batches(this.batchPage, this.batchPageSize).then(({ list, count }) => {
+        this.batches = list || [];
+        this.batchTotal = count || 0;
+        if (this.batchTotalPages < this.batchPage) { this.batchPage = this.batchTotalPages; }
+      }).catch(() => {});
+    },
+    goBatch(p) { if (p < 1 || p > this.batchTotalPages) return; this.batchPage = p; this.loadBatches(); },
+    selectBatch(b) { this.currentBatch = b; this.ipPage = 1; this.selectedIps.clear(); this.loadIpList(); this.loadIpTop(); },
+    openDelBatch(b) { if (!b) return; this.delModal.row = b; this.delModal.show = true; },
+    confirmDelBatch() {
+      const row = this.delModal.row;
+      if (!row) return;
+      App.api.analysis.deleteBatch(row.id).then(() => {
+        ElementPlus.ElMessage.success('批次已删除');
+        this.delModal.show = false;
+        if (this.currentBatch && this.currentBatch.id === row.id) this.currentBatch = null;
+        this.loadBatches();
+      }).catch(() => {});
+    },
+
+    /* ===== IP 列表 ===== */
+    listFilter() {
+      return {
+        keyword: (this.keyword || '').trim(),
+        order_by: ['req', 'qps', 'block'].includes(this.sortBy) ? this.sortBy : 'req',
+        min_req: parseInt(this.thReq) || 0,
+        min_qps: parseInt(this.thQps) || 0
+      };
+    },
+    loadIpList() {
+      if (!this.currentBatch) return;
+      App.api.analysis.ipList(this.currentBatch.id, { page: this.ipPage, pageSize: this.ipPageSize, filters: this.listFilter() })
+        .then(({ list, count }) => { this.ipList = list || []; this.ipTotal = count || 0; })
+        .catch(() => {});
+    },
+    loadIpTop() {
+      if (!this.currentBatch) return;
+      App.api.analysis.ipTop(this.currentBatch.id, 10).then((data) => {
+        this.reqTop = (data && data.req_top) || [];
+        this.blockTop = (data && data.block_top) || [];
+        this.renderIpCharts();
+      }).catch(() => {});
+    },
+    applyFilter() { this.ipPage = 1; this.loadIpList(); this.loadIpTop(); },
+    goIpPage(p) { if (p < 1 || p > this.ipTotalPages) return; this.ipPage = p; this.loadIpList(); },
+    resetFilter() { this.keyword = ''; this.sortBy = 'req'; this.thQps = ''; this.thReq = ''; this.applyFilter(); },
+    toggleIp(x, e) { e.target.checked ? this.selectedIps.add(x.ip) : this.selectedIps.delete(x.ip); },
+    toggleAll(e) { this.curIps.forEach(x => e.target.checked ? this.selectedIps.add(x.ip) : this.selectedIps.delete(x.ip)); },
+    exportCsv() {
+      if (!this.currentBatch) return;
+      const rows = this.curIps.map(x => [x.ip, x.region_full || '-', x.req_count, x.block_count, x.qps, x.ua || '-']);
+      App.ui.downloadCsv('IP分析_批次' + this.currentBatch.id + '.csv', ['IP', '归属地', '总请求数', '拦截数', 'QPS', 'UA'], rows);
+      ElementPlus.ElMessage.success('分析结果已导出 CSV');
+    },
+
+    /* ===== 详情 ===== */
+    openDetail(x) { this.detail.row = x; this.detail.page = 1; this.detail.visible = true; this.loadDetail(); },
+    loadDetail() {
+      if (!this.currentBatch || !this.detail.row) return;
+      App.api.analysis.ipDetail(this.currentBatch.id, this.detail.row.ip, this.detail.page, this.detail.pageSize)
+        .then(({ list, count }) => { this.detail.list = list || []; this.detail.total = count || 0; this.$nextTick(() => this.renderDetailCharts()); })
+        .catch(() => {});
+    },
+    goDetailPage(p) { if (p < 1 || p > this.detailTotalPages) return; this.detail.page = p; this.loadDetail(); },
+    detailAddGroup() { if (!this.detail.row) return; this.detail.visible = false; this.openGroupModal([this.detail.row.ip]); },
+
+    /* ===== 加入 IP 组 ===== */
+    batchAddGroup() {
+      if (this.selectedIps.size === 0) { ElementPlus.ElMessage.warning('请先勾选要加入的 IP'); return; }
+      this.openGroupModal([...this.selectedIps]);
+    },
+    openGroupModal(ips) {
+      if (!ips || !ips.length) return;
+      this.groupModal.ips = ips;
+      this.groupModal.groupId = '';
+      this.groupModal.newName = '';
+      this.groupModal.show = true;
+      if (!this.groups.length) {
+        App.api.ipGroup.list(1, 10000).then(({ list }) => { this.groups = list || []; }).catch(() => {});
+      }
+    },
+    parseIps(s) { return String(s || '').split(/[\n,]/).map(x => x.trim()).filter(Boolean); },
+    mergeIps() { const set = new Set(); [].slice.call(arguments).forEach(a => (a || []).forEach(x => set.add(x))); return [...set]; },
+    confirmGroup() {
+      const m = this.groupModal;
+      if (!m.groupId) { ElementPlus.ElMessage.warning('请选择 IP 组或新建'); return; }
+      this.savingGroup = true;
+      let task;
+      if (m.groupId === 'new') {
+        const name = m.newName.trim();
+        if (!name) { ElementPlus.ElMessage.error('请输入新 IP 组名称'); this.savingGroup = false; return; }
+        task = App.api.ipGroup.save({ id: '', name, type: 'ip', ip_list: m.ips.join('\n'), count: m.ips.length, status: 1 })
+          .then(() => ElementPlus.ElMessage.success(`已创建 IP 组「${name}」并加入 ${m.ips.length} 个 IP`));
+      } else {
+        const g = this.groups.find(x => x.id == m.groupId);
+        if (!g) { this.savingGroup = false; return; }
+        const merged = this.mergeIps(this.parseIps(g.ip_list), m.ips);
+        task = App.api.ipGroup.save({ id: g.id, name: g.name, type: g.type || 'ip', ip_list: merged.join('\n'), count: merged.length, status: g.status === 1 ? 1 : 0 })
+          .then(() => ElementPlus.ElMessage.success(`已将 ${m.ips.length} 个 IP 加入「${g.name}」`));
+      }
+      task.catch(() => {}).finally(() => {
+        this.savingGroup = false;
+        this.groupModal.show = false;
+        this.selectedIps.clear();
+      });
+    },
+
+    /* ===== 图表 ===== */
+    getChart(id, el) {
+      if (!this.charts[id]) this.charts[id] = echarts.init(el);
+      return this.charts[id];
+    },
+    chartColors() {
+      const g = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      return {
+        tooltipBg: g('--chart-tooltip-bg'), tooltipBorder: g('--chart-tooltip-border'), tooltipText: g('--chart-tooltip-text'),
+        axisLine: g('--chart-axis-line'), splitLine: g('--chart-split-line'), axisLabel: g('--chart-axis-label'),
+        legendText: g('--chart-legend-text'), borderColor: g('--chart-border-color'), labelColor: g('--chart-label-color')
+      };
+    },
+    emptyTip(chart, label) {
+      chart.setOption({ graphic: { type: 'text', left: 'center', top: 'middle', style: { text: label || '暂无数据', fill: '#5c6b7d', fontSize: 13 } } });
+    },
+    groupBy(arr, keyFn) {
+      const m = new Map();
+      (arr || []).forEach(x => { const k = keyFn(x); m.set(k, (m.get(k) || 0) + 1); });
+      return [...m.entries()].map(([name, value]) => ({ name, value }));
+    },
+    barSpec(elId, data, color, c) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const chart = this.getChart(elId, el);
+      chart.clear();
+      if (!data.length) { this.emptyTip(chart); return; }
+      const cut = s => { s = String(s); return s.length > 18 ? (s.slice(0, 18) + '…') : s; };
+      chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: c.tooltipBg, borderColor: c.tooltipBorder, textStyle: { color: c.tooltipText } },
+        grid: { left: 70, right: 24, top: 8, bottom: 16 },
+        xAxis: { type: 'value', splitLine: { lineStyle: { color: c.splitLine } }, axisLabel: { color: c.axisLabel, fontSize: 10 } },
+        yAxis: { type: 'category', data: data.map(d => cut(d.name)).reverse(), axisLine: { lineStyle: { color: c.axisLine } }, axisLabel: { color: c.legendText, fontSize: 10 } },
+        series: [{ type: 'bar', data: data.map(d => d.value).reverse(), barWidth: 10, itemStyle: { borderRadius: [0, 3, 3, 0], color } }]
+      });
+    },
+    pieSpec(elId, data, colors, c) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const chart = this.getChart(elId, el);
+      chart.clear();
+      if (!data.length) { this.emptyTip(chart); return; }
+      chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'item', backgroundColor: c.tooltipBg, borderColor: c.tooltipBorder, textStyle: { color: c.tooltipText } },
+        legend: { bottom: 0, textStyle: { color: c.legendText, fontSize: 10 } },
+        series: [{
+          type: 'pie', radius: ['35%', '62%'], center: ['50%', '42%'],
+          data: data.map((d, i) => ({ name: d.name, value: d.value, itemStyle: { color: colors[i % colors.length] } })),
+          label: { show: false }
+        }]
+      });
+    },
+    lineSpec(elId, labels, data, color, c) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const chart = this.getChart(elId, el);
+      chart.clear();
+      if (!labels.length) { this.emptyTip(chart); return; }
+      chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis', backgroundColor: c.tooltipBg, borderColor: c.tooltipBorder, textStyle: { color: c.tooltipText } },
+        grid: { left: 40, right: 12, top: 12, bottom: 20 },
+        xAxis: { type: 'category', data: labels, axisLine: { lineStyle: { color: c.axisLine } }, axisLabel: { color: c.axisLabel, interval: 3 } },
+        yAxis: { type: 'value', splitLine: { lineStyle: { color: c.splitLine } }, axisLabel: { color: c.axisLabel } },
+        series: [{
+          type: 'line', smooth: true, symbol: 'none', data, lineStyle: { width: 2, color },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: color + '44' }, { offset: 1, color: color + '00' }]) }
+        }]
+      });
+    },
+    renderIpCharts() {
+      this.$nextTick(() => {
+        const c = this.chartColors();
+        const reqTop = (this.reqTop || []).map(x => ({ name: x.ip, value: Number(x.req_count) || 0 }));
+        const blockTop = (this.blockTop || []).map(x => ({ name: x.ip, value: Number(x.block_count) || 0 }));
+        this.barSpec('ipReqChart', reqTop, '#2f7bf6', c);
+        this.barSpec('ipBlockChart', blockTop, '#ef4444', c);
+      });
+    },
+    uaType(ua) {
+      const s = String(ua || '').toLowerCase();
+      if (!s) return '未知';
+      if (s.indexOf('python') !== -1) return 'python';
+      if (s.indexOf('curl') !== -1) return 'curl';
+      if (s.indexOf('mozilla') !== -1) return '浏览器';
+      if (s.indexOf('go-http-client') !== -1 || s.indexOf('go http') !== -1) return 'Go';
+      if (s.indexOf('java') !== -1) return 'Java';
+      if (s.indexOf('scrapy') !== -1) return 'scrapy';
+      return '其他';
+    },
+    renderDetailCharts() {
+      const c = this.chartColors();
+      const list = this.detail.list || [];
+      const uriTop = this.groupBy(list, x => x.uri || '-').sort((a, b) => b.value - a.value).slice(0, 6);
+      const methodDist = this.groupBy(list, x => x.method || '-').sort((a, b) => b.value - a.value);
+      const statusDist = this.groupBy(list, x => x.status != null ? String(x.status) : '-').sort((a, b) => b.value - a.value);
+      const uaDist = this.groupBy(list, x => this.uaType(x.ua)).sort((a, b) => b.value - a.value);
+      const hourArr = Array.from({ length: 24 }, () => 0);
+      list.forEach(x => { const h = parseInt(String(x.ts || '').slice(11, 13)); if (h >= 0 && h <= 23) hourArr[h]++; });
+      this.barSpec('dUriChart', uriTop, '#2f7bf6', c);
+      this.pieSpec('dMethodChart', methodDist, ['#2f7bf6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4'], c);
+      this.pieSpec('dStatusChart', statusDist, ['#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'], c);
+      this.pieSpec('dUaChart', uaDist, ['#ef4444', '#8b5cf6', '#2f7bf6', '#f59e0b', '#22c55e', '#5c6b7d'], c);
+      this.lineSpec('dHourChart', Array.from({ length: 24 }, (_, i) => i + '时'), hourArr, '#22c55e', c);
+    },
+    renderAllCharts() { this.renderIpCharts(); if (this.detail.visible) this.renderDetailCharts(); },
+    resizeCharts() { Object.values(this.charts).forEach(ch => ch.resize()); }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

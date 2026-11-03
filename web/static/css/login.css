@@ -1,0 +1,162 @@
+/* ========================================
+   登录页样式（对齐 UI 原型）
+   复用 common.css 的主题变量：--bg-body/--bg-card/--accent/--purple/--border 等
+   ======================================== */
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-body);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 动态网格背景 */
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: linear-gradient(var(--text-primary) 1px, transparent 1px),
+    linear-gradient(90deg, var(--text-primary) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* 光晕背景 */
+.bg-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.15;
+}
+.glow-1 { top: -200px; right: -100px; background: var(--accent); }
+.glow-2 { bottom: -200px; left: -100px; background: var(--purple); }
+
+/* 登录主体 */
+.login-box {
+  position: relative;
+  width: 400px;
+  max-width: 90vw;
+  z-index: 1;
+}
+
+/* 顶部 logo */
+.login-logo {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.login-logo .icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent), #5b5ef0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 8px 32px rgba(47, 123, 246, 0.3);
+}
+.login-logo h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 16px;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+}
+.login-logo p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* 登录卡片 */
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  box-shadow: var(--shadow);
+}
+
+/* 输入组（图标 + 输入框） */
+.input-group {
+  position: relative;
+}
+.input-group .input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+.input-group input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font);
+  padding: 12px 14px 12px 42px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input-group input:focus { border-color: var(--accent); }
+.input-group .toggle-pwd {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.input-group .toggle-pwd:hover { color: var(--accent); }
+
+/* 记住我 / 忘记密码 */
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.login-remember input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+.login-forgot {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.login-forgot:hover { opacity: 0.8; }
+
+/* 登录按钮 */
+.login-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 12px;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+/* 底部版权 */
+.login-footer {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 20px;
+}
+
+/* 右上主题切换 */
+.theme-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 2;
+}

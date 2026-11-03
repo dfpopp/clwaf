@@ -1,0 +1,92 @@
+/* ========================================
+   子页面内容区样式（iframe 内嵌页面使用）
+   基于 variables.css 主题令牌，配合 Element Plus
+   ======================================== */
+html, body {
+  height: 100%;
+  background: var(--bg-color-page, #f5f7fa);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica", Arial, sans-serif;
+}
+
+[v-cloak] { display: none !important; }
+
+.page-container {
+  padding: 16px;
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+}
+.page-container::-webkit-scrollbar { width: 6px; height: 6px; }
+.page-container::-webkit-scrollbar-thumb { background: var(--border-color, #dcdfe6); border-radius: 6px; }
+
+/* 页头 */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.page-header .title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color-primary, #303133);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-header .title::before {
+  content: "";
+  width: 3px; height: 16px; border-radius: 3px;
+  background: var(--theme-color, #409EFF);
+}
+
+/* 筛选栏卡片 */
+.filter-card { margin-bottom: 12px; }
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.filter-row .el-form-item { margin-bottom: 0; }
+
+/* 卡片间距 */
+.block-card { margin-bottom: 12px; }
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.table-toolbar .left { display: flex; align-items: center; gap: 10px; }
+.table-toolbar .right { display: flex; align-items: center; gap: 8px; }
+
+/* 统计小卡片 */
+.mini-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+.mini-stats .mini-item {
+  background: var(--bg-color, #fff);
+  border-radius: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color-lighter, #ebeef5);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.mini-stats .mini-icon {
+  width: 42px; height: 42px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.mini-stats .mini-label { font-size: 12px; color: var(--text-color-secondary, #909399); }
+.mini-stats .mini-value { font-size: 20px; font-weight: 700; color: var(--text-color-primary, #303133); }
+.mini-stats .mini-sub { font-size: 11px; color: var(--text-color-secondary, #909399); margin-top: 2px; }
+
+@media (max-width: 1200px) { .mini-stats { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .mini-stats { grid-template-columns: 1fr; } }
+
+/* 表格内标签 */
+.tag-cell { font-family: "SF Mono", Consolas, Menlo, monospace; }
+
+/* 等宽文字 */
+.mono { font-family: "SF Mono", Consolas, Menlo, monospace; }

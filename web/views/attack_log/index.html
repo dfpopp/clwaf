@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>攻击日志</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ===== 弹窗 ===== */
+    .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); width: 480px; max-width: 92%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); animation: modalIn 0.2s ease; }
+    .modal.modal-extra { width: 680px; }
+    @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+    .modal-title .modal-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .modal-icon.icon-danger { background: rgba(239,68,68,0.12); color: var(--danger); }
+    .modal-icon.icon-primary { background: var(--accent-soft); color: var(--accent); }
+    .modal-icon.icon-blue { background: var(--accent-soft); color: var(--accent); }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: var(--text-primary); }
+    .modal-body { padding: 18px 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+    .modal-body .highlight { color: var(--text-primary); font-weight: 600; font-family: "SF Mono", Consolas, monospace; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 18px; border-top: 1px solid var(--border); }
+
+    /* 筛选栏 */
+    .filter-bar { flex-wrap: wrap; }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .filter-group .select { min-width: 150px; }
+    .filter-group .search-box input { width: 160px; }
+
+    /* 处置动作标签 */
+    .tag-act-block { background: rgba(239,68,68,0.12); color: #f87171; }
+    .tag-act-challenge { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .tag-act-observe { background: rgba(47,123,246,0.12); color: #60a5fa; }
+    .tag-act-waiting_room { background: rgba(139,92,246,0.12); color: #a78bfa; }
+
+    /* 统计卡片压缩：8列两排 */
+    .stat-grid.cols-8 { grid-template-columns: repeat(8, 1fr); gap: 10px; }
+    .stat-grid.cols-8 .stat-card { padding: 10px 12px; }
+    .stat-grid.cols-8 .stat-card .stat-icon { width: 26px; height: 26px; font-size: 12px; }
+    .stat-grid.cols-8 .stat-card .stat-label { font-size: 11px; }
+    .stat-grid.cols-8 .stat-card .stat-value { font-size: 18px; margin: 6px 0 0; }
+    .stat-grid.cols-8 .stat-card .stat-change { font-size: 10px; }
+    @media (max-width: 1400px) { .stat-grid.cols-8 { grid-template-columns: repeat(5, 1fr); } }
+    @media (max-width: 1100px) { .stat-grid.cols-8 { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 768px) { .stat-grid.cols-8 { grid-template-columns: repeat(2, 1fr); } }
+
+    /* 表格 + 饼图布局 */
+    .log-layout { display: flex; gap: 16px; align-items: flex-start; }
+    .log-main { flex: 1; min-width: 0; }
+    .log-side { width: 300px; flex-shrink: 0; }
+    #pieChart { height: 360px; }
+    @media (max-width: 1100px) { .log-layout { flex-direction: column; } .log-side { width: 100%; } }
+
+    /* IP 单元格 */
+    .ip-cell { display: flex; flex-direction: column; gap: 1px; }
+    .ip-region { font-size: 11px; color: var(--text-muted); }
+
+    /* URI 截断 */
+    .cell-uri { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+    .row-actions { display: inline-flex; gap: 6px; }
+
+    /* 表格横向滚动：窄屏时列不裁剪，可拖滚动条查看 */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table-wrap table { min-width: 1280px; }
+
+    /* 固定操作列（最右侧列），横向滚动时保持可见 */
+    .table-wrap table th:last-child,
+    .table-wrap table td:last-child {
+      position: sticky;
+      right: 0;
+      background: var(--bg-card);
+      z-index: 2;
+      box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.18);
+    }
+    .table-wrap table tbody tr:hover td:last-child { background: var(--bg-card-hover); }
+    .table-wrap table thead th:last-child { z-index: 3; }
+
+    /* 详情弹窗 */
+    .detail-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .detail-time { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; }
+    .detail-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 16px; }
+    .detail-list > div { display: flex; flex-direction: column; gap: 3px; }
+    .detail-list > div.full { grid-column: 1 / -1; }
+    .detail-list dt { font-size: 11px; color: var(--text-muted); }
+    .detail-list dd { font-size: 13px; color: var(--text-primary); word-break: break-all; }
+    .uri-break { word-break: break-all; }
+    .ipg-name-input { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary); font-size: 13px; box-sizing: border-box; }
+    .ipg-name-input:focus { outline: none; border-color: var(--accent); }
+    .detail-section { font-size: 12px; color: var(--text-secondary); margin: 4px 0 8px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .json-block { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; line-height: 1.5; margin-bottom: 16px; }
+    @media (max-width: 768px) { .detail-list { grid-template-columns: 1fr; } .modal.modal-extra { width: 100%; } }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="layout">
+    <div class="main">
+      <div class="content">
+        <!-- 统计卡片 -->
+        <div class="stat-grid cols-8">
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">今日总攻击数</span>
+              <span class="stat-icon icon-blue"><el-icon :size="15"><component :is="'DataAnalysis'"/></el-icon></span>
+            </div>
+            <div class="stat-value">{{ statTotal }}</div>
+            <div class="stat-change">实时记录命中防护规则的请求</div>
+          </div>
+          <div class="stat-card" v-for="c in attackCards" :key="c.type">
+            <div class="stat-top">
+              <span class="stat-label">{{ c.label }}</span>
+              <span class="stat-icon icon-blue"><el-icon :size="15"><component :is="'DataAnalysis'"/></el-icon></span>
+            </div>
+            <div class="stat-value">{{ distMap[c.type] || 0 }}</div>
+            <div class="stat-change">占比 <span class="up">{{ statPct(c.type) }}%</span></div>
+          </div>
+        </div>
+
+        <!-- 筛选栏 -->
+        <div class="section-title">攻击记录 <span class="sub">实时记录命中防护规则的请求</span></div>
+        <div class="filter-bar">
+          <div class="filter-left">
+            <div class="filter-group">
+              <label class="filter-label"><el-icon :size="14"><component :is="'Monitor'"/></el-icon>站点</label>
+              <el-select v-model="f.site_id" placeholder="全部站点" clearable @change="load" style="width:130px;">
+                <el-option v-for="s in sites" :key="s.id" :value="s.id" :label="s.name"></el-option>
+              </el-select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label"><el-icon :size="14"><component :is="'Filter'"/></el-icon>攻击类型</label>
+              <el-select v-model="f.types" multiple placeholder="全部类型" collapse-tags collapse-tags-tooltip @change="onTypeChange" style="width:220px;">
+                <el-option v-for="o in attackOptions" :key="o.value" :value="o.value" :label="o.label"></el-option>
+              </el-select>
+            </div>
+            <div class="filter-group" v-if="f.types.includes('challenge')">
+              <label class="filter-label"><el-icon :size="14"><component :is="'Checked'"/></el-icon>验证类型</label>
+              <el-select v-model="f.challenge_type" placeholder="全部验证类型" clearable @change="load" style="width:140px;">
+                <el-option v-for="o in challengeOptions" :key="o.value" :value="o.value" :label="o.label"></el-option>
+              </el-select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label"><el-icon :size="14"><component :is="'Connection'"/></el-icon>接口类型</label>
+              <el-select v-model="f.is_api" placeholder="全部" clearable @change="load" style="width:130px;">
+                <el-option value="1" label="API接口"></el-option>
+                <el-option value="0" label="Web页面"></el-option>
+              </el-select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label"><el-icon :size="14"><component :is="'Clock'"/></el-icon>时间范围</label>
+              <el-date-picker v-model="f.timeRange" type="datetimerange" range-separator="~" start-placeholder="开始时间" end-placeholder="结束时间"
+                value-format="YYYY-MM-DD HH:mm:ss" :clearable="true" style="width:360px;" @change="onRangeChange" @clear="onRangeClear"></el-date-picker>
+            </div>
+            <div class="filter-group">
+              <div class="search-box">
+                <el-icon :size="14"><component :is="'Search'"/></el-icon>
+                <input type="text" v-model="f.client_ip" @keyup.enter="load" placeholder="搜索源IP...">
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <el-button @click="reset"><el-icon :size="13"><component :is="'RefreshLeft'"/></el-icon> 重置</el-button>
+            <el-button type="primary" @click="load"><el-icon :size="13"><component :is="'Search'"/></el-icon> 查询</el-button>
+          </div>
+        </div>
+
+        <!-- 表格 + 饼图 -->
+        <div class="log-layout">
+          <div class="log-main">
+            <div class="card">
+              <div class="card-body" style="padding:0;">
+                <div class="toolbar" style="margin-bottom:0;padding:14px 16px;border-bottom:1px solid var(--border);">
+                  <div class="toolbar-left">
+                    <span class="filter-label"><el-icon :size="14"><component :is="'List'"/></el-icon>命中记录</span>
+                  </div>
+                  <div class="toolbar-right">
+                    <el-button :disabled="exporting" @click="exportCsv"><el-icon :size="13"><component :is="'Download'"/></el-icon> {{ exporting ? '导出中…' : '导出CSV' }}</el-button>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>时间</th>
+                        <th>源IP</th>
+                        <th>目标站点</th>
+                        <th>攻击类型</th>
+                        <th>验证类型</th>
+                        <th>接口类型</th>
+                        <th>匹配规则</th>
+                        <th>请求URI</th>
+                        <th>方法</th>
+                        <th>处置动作</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-if="paged.length === 0">
+                        <td colspan="11"><div class="empty-state"><el-icon :size="36"><component :is="'FolderOpened'"/></el-icon><div>暂无匹配的攻击记录</div></div></td>
+                      </tr>
+                      <tr v-for="r in paged" :key="r.id">
+                        <td style="color:var(--text-muted);">{{ r.create_time }}</td>
+                        <td>
+                          <div class="ip-cell">
+                            <span class="mono">{{ r.client_ip }}</span>
+                            <span v-if="r.region" class="ip-region">{{ r.region }}</span>
+                          </div>
+                        </td>
+                        <td>{{ r.site_name || '-' }}</td>
+                        <td><span class="tag" :class="attackTag(r.attack_type)">{{ attackLabel(r.attack_type) }}</span></td>
+                        <td><span v-if="r.challenge_type" class="tag tag-warning">{{ challengeLabel(r.challenge_type) }}</span><span v-else>-</span></td>
+                        <td><span class="tag" :class="r.is_api === 1 ? 'tag-info' : 'tag-neutral'">{{ r.is_api === 1 ? 'API接口' : 'Web页面' }}</span></td>
+                        <td><span class="mono">{{ r.rule_name || '-' }}</span></td>
+                        <td><span class="mono cell-uri" :title="r.uri">{{ r.uri || '-' }}</span></td>
+                        <td><span class="tag tag-success">{{ r.method || '-' }}</span></td>
+                        <td><span class="tag" :class="actionTag(r.action)">{{ actionLabel(r.action) }}</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <el-button size="small" @click="openDetail(r)"><el-icon :size="12" style="margin-right:3px;"><component :is="'View'"/></el-icon> 详情</el-button>
+                            <el-button size="small" type="danger" @click="openIPGroup(r)"><el-icon :size="12" style="margin-right:3px;"><component :is="'Files'"/></el-icon> 加入IP组</el-button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <!-- 分页 -->
+                <div class="pagination">
+                  <button :disabled="page <= 1" @click="goPage(page - 1)"><el-icon><component :is="'ArrowLeft'"/></el-icon></button>
+                  <template v-for="p in pageItems" :key="p">
+                    <button v-if="p !== '...'" :class="{ active: p === page }" @click="goPage(p)">{{ p }}</button>
+                    <button v-else disabled>...</button>
+                  </template>
+                  <button :disabled="page >= totalPages" @click="goPage(page + 1)"><el-icon><component :is="'ArrowRight'"/></el-icon></button>
+                  <span class="page-info">共 {{ total }} 条 / {{ totalPages }} 页</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="log-side">
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">攻击类型分布</span>
+                <span class="card-extra">当前查询</span>
+              </div>
+              <div class="card-body">
+                <div id="pieChart"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 详情 / 加入IP组为独立页面，见 attack_log/detail.html、attack_log/ipgroup.html（由 DialogBridge 以弹窗打开） -->
+  <!-- 导出设置（分段导出） -->
+  <el-dialog v-model="exportDlg.show" title="导出CSV" width="460px" append-to-body>
+    <div style="font-size:13px;color:var(--text-secondary);line-height:1.9;">
+      <div>当前筛选共 <span style="color:var(--text-primary);font-weight:600;">{{ total }}</span> 条记录</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <span>每页条数（≤ {{ exportDlg.max }}）</span>
+        <el-input-number v-model="exportDlg.size" :min="1000" :max="exportDlg.max" :step="10000" size="small" style="width:150px;" />
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <span>共 {{ exportPages }} 页，导出第</span>
+        <el-input-number v-model="exportDlg.page" :min="1" :max="exportPages" size="small" style="width:110px;" />
+        <span>页</span>
+      </div>
+      <div style="margin-top:8px;color:var(--text-muted);font-size:12px;">本页范围：第 {{ exportStart }} ~ {{ exportEnd }} 条（按时间倒序）</div>
+    </div>
+    <template #footer>
+      <el-button @click="exportDlg.show = false">取消</el-button>
+      <el-button type="primary" :loading="exporting" @click="doExport">导出本页</el-button>
+    </template>
+  </el-dialog>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/lib/echarts.min.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    const attackOptions = App.ui.attackOptions().map(o => ({ value: o.value, label: o.label, color: this.attackColor(o.value) }));
+    return {
+      f: { site_id: '', types: [], challenge_type: '', is_api: '', timeRange: [], client_ip: '' },
+      attackOptions: attackOptions,
+      challengeOptions: [
+        { value: 'silent_challenge', label: 'JS静默验证' },
+        { value: 'slider', label: '滑块验证' },
+        { value: 'captcha', label: '图形验证码' },
+        { value: 'puzzle', label: '拼图验证' }
+      ],
+      sites: [],
+      list: [], total: 0, page: 1, pageSize: 10,
+      stats: { cc_blocked: 0, challenge_blocked: 0, attack_ips: 0, attack_type_dist: [] },
+      exporting: false,
+      exportDlg: { show: false, size: 100000, page: 1, max: 100000 },
+    };
+  },
+  computed: {
+    distMap() {
+      const m = {};
+      // 驼峰→蛇形归一：引擎历史写入键（2026-10-18 蛇形统一前），与蛇形键同义（与 renderPie 同口径）
+      (this.stats.attack_type_dist || []).forEach(d => {
+        let t = d.type || '';
+        if (t === 'crawlerIp') t = 'crawler_ip'; else if (t === 'customRule') t = 'custom_rule'; else if (t === 'waitingRoom') t = 'waiting_room_full';
+        m[t] = (m[t] || 0) + (d.count || 0);
+      });
+      return m;
+    },
+    statTotal() { return (this.stats.attack_type_dist || []).reduce((s, d) => s + (d.count || 0), 0); },
+    attackCards() {
+      const order = ['cc', 'custom_rule', 'challenge', 'waiting_room_full', 'crawler_ip', 'sql', 'xss', 'lfi', 'cmdi', 'ssrf', 'ssti', 'deserial', 'infoleak', 'shell', 'uri_too_long'];
+      return order.map(t => ({ type: t, label: App.ui.attackLabel(t) }));
+    },
+    totalPages() { return Math.max(1, Math.ceil(this.total / this.pageSize)); },
+    pageItems() {
+      const tp = this.totalPages, cur = this.page;
+      const items = [];
+      for (let i = 1; i <= tp; i++) {
+        if (i === 1 || i === tp || (i >= cur - 2 && i <= cur + 2)) items.push(i);
+        else if (items[items.length - 1] !== '...') items.push('...');
+      }
+      return items;
+    },
+    paged() { return this.list; },
+    exportPages() { return Math.max(1, Math.ceil(this.total / (this.exportDlg.size || 1))); },
+    exportStart() { return (this.exportDlg.page - 1) * this.exportDlg.size + 1; },
+    exportEnd() { return Math.min(this.exportDlg.page * this.exportDlg.size, this.total); },
+  },
+  mounted() {
+    ThemeManager.init();
+    this.setDefaultRange();
+    App.api.site.list(1, 100).then(({ list }) => { this.sites = list || []; }).catch(() => {});
+    this.load();
+    window.onSearch = () => this.load(this.page);
+    window.addEventListener('resize', () => { if (this._pie) this._pie.resize(); });
+    window.addEventListener('message', (e) => { if (e.data && e.data.action === 'theme_change') this.renderPie(); });
+  },
+  methods: {
+    statPct(t) { return this.statTotal ? Math.round((this.distMap[t] || 0) / this.statTotal * 100) : 0; },
+    attackColor(v) { return App.ui.attackColor(v); },
+    attackLabel(v) { return App.ui.attackLabel(v); },
+    actionLabel(v) { return App.ui.actionLabel(v); },
+    challengeLabel(v) { return App.ui.challengeTypeLabel(v); },
+    attackTag(v) { return App.ui.attackTagClass(v); },
+    actionTag(v) { return App.ui.actionTagClass(v); },
+    pad2(n) { return String(n).padStart(2, '0'); },
+    fmtTS(d) {
+      return d.getFullYear() + '-' + this.pad2(d.getMonth() + 1) + '-' + this.pad2(d.getDate()) + ' ' + this.pad2(d.getHours()) + ':' + this.pad2(d.getMinutes()) + ':' + this.pad2(d.getSeconds());
+    },
+    /* 默认时间窗：近24小时（对齐人机验证页 datetimerange 口径） */
+    setDefaultRange() {
+      const now = new Date();
+      this.f.timeRange = [this.fmtTS(new Date(now.getTime() - 24 * 3600 * 1000)), this.fmtTS(now)];
+    },
+    onRangeClear() {
+      // 清空时间 → 回到默认近24小时
+      this.setDefaultRange();
+      this.load(1);
+    },
+    onRangeChange() {
+      // 清空/未选完整区间时回退默认窗口（对齐人机验证页约定）
+      if (!this.f.timeRange || this.f.timeRange.length !== 2) this.setDefaultRange();
+      this.load(1);
+    },
+    load(page) {
+      const p = { page: page || 1, page_size: this.pageSize };
+      if (this.f.site_id) p.site_id = this.f.site_id;
+      if (this.f.client_ip) p.client_ip = this.f.client_ip;
+      const tr = this.f.timeRange || [];
+      if (tr[0]) p.start_time = tr[0];
+      if (tr[1]) p.end_time = tr[1];
+      const types = this.f.types || [];
+      if (types.length && types.length !== this.attackOptions.length) p.attack_type = types.join(',');
+      if (this.f.challenge_type) p.challenge_type = this.f.challenge_type;
+      if (this.f.is_api !== '' && this.f.is_api !== null && this.f.is_api !== undefined) p.is_api = this.f.is_api;
+      this.loadStats();
+      App.api.attackLog.list(p).then(({ list, count }) => {
+        this.list = list || [];
+        this.total = count || 0;
+        this.page = page || 1;
+        this.renderPie();
+      }).catch(() => {});
+    },
+    loadStats() {
+      const tr = this.f.timeRange || [];
+      App.api.attackLog.stats({ site_id: 0, start_time: tr[0] || '', end_time: tr[1] || '' }).then(stats => {
+        if (stats) { this.stats = stats; this.renderPie(); }
+      }).catch(() => {});
+    },
+    reset() {
+      this.f = { site_id: '', types: [], challenge_type: '', is_api: '', timeRange: [], client_ip: '' };
+      this.setDefaultRange();
+      this.load(1);
+    },
+    onTypeChange() { if (!this.f.types.includes('challenge')) this.f.challenge_type = ''; this.load(1); },
+    goPage(p) { if (p >= 1 && p <= this.totalPages) this.load(p); },
+    /* 详情 / 加入IP组：以 iframe 弹窗打开独立页面（DialogBridge），关闭由子页面回调 */
+    openDetail(row) {
+      DialogBridge.open({ id: 'al_detail', title: '攻击详情', url: '/attack_log/detail.html?id=' + encodeURIComponent(row.id), width: '680px', height: 560 });
+    },
+    openIPGroup(row) {
+      DialogBridge.open({ id: 'al_ipgroup', title: '加入IP组', url: '/attack_log/ipgroup.html?ip=' + encodeURIComponent(row.client_ip || ''), width: '480px', height: 420 });
+    },
+    /* 导出 CSV（分段）：打开设置弹窗，按「每页条数 + 页码」导出对应区段，后端流式写出 */
+    async exportCsv() {
+      if (!this.total) { ElementPlus.ElMessage.warning('当前筛选条件下没有可导出的记录'); return; }
+      this.exportDlg.max = 100000;
+      this.exportDlg.size = Math.min(this.exportDlg.size || 100000, 100000);
+      this.exportDlg.page = 1;
+      this.exportDlg.show = true;
+    },
+    async doExport() {
+      if (this.exporting) return;
+      this.exporting = true;
+      try {
+        const p = { site_id: this.f.site_id, client_ip: this.f.client_ip, challenge_type: this.f.challenge_type, is_api: this.f.is_api, page_size: this.exportDlg.size, page: this.exportDlg.page };
+        const tr = this.f.timeRange || [];
+        if (tr[0]) p.start_time = tr[0];
+        if (tr[1]) p.end_time = tr[1];
+        const types = this.f.types || [];
+        if (types.length && types.length !== this.attackOptions.length) p.attack_type = types.join(',');
+        const blob = await App.api.attackLog.export(p);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        const d = new Date(), pad = n => String(n).padStart(2, '0');
+        a.download = 'attack_log_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + '_p' + this.exportDlg.page + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        ElementPlus.ElMessage.success('本页导出完成（' + this.exportStart + ' ~ ' + this.exportEnd + ' 条）');
+        this.exportDlg.show = false;
+      } catch (e) {
+        ElementPlus.ElMessage.error((e && e.message) || '导出失败');
+      } finally {
+        this.exporting = false;
+      }
+    },
+    renderPie() {
+      if (!window.echarts) return;
+      const el = document.getElementById('pieChart');
+      if (!el) return;
+      const acc = {};
+      (this.stats.attack_type_dist || []).forEach(d => {
+        let k = d.type || 'unknown';
+        if (k === 'crawlerIp') k = 'crawler_ip'; else if (k === 'customRule') k = 'custom_rule'; else if (k === 'waitingRoom') k = 'waiting_room_full'; // 引擎历史驼峰键归一（蛇形统一过渡期）
+        acc[k] = (acc[k] || 0) + (d.count || 0);
+      });
+      const data = Object.entries(acc).map(([k, v]) => ({ name: App.ui.attackLabel(k), value: v, itemStyle: { color: this.attackColor(k) } }));
+      const root = getComputedStyle(document.documentElement);
+      const textColor = root.getPropertyValue('--text-primary').trim() || '#e6edf3';
+      const borderColor = root.getPropertyValue('--bg-card').trim() || '#151b24';
+      if (!this._pie) this._pie = echarts.init(el);
+      this._pie.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { bottom: 0, left: 'center', icon: 'circle', textStyle: { color: textColor, fontSize: 11 }, itemWidth: 10, itemHeight: 10, itemGap: 12, padding: [10, 0, 0, 0] },
+        series: [{
+          type: 'pie', radius: ['42%', '68%'], center: ['50%', '43%'],
+          avoidLabelOverlap: true,
+          itemStyle: { borderColor: borderColor, borderWidth: 2 },
+          label: { show: true, formatter: '{d}%', color: textColor, fontSize: 11 },
+          labelLine: { length: 12, length2: 10 },
+          labelLayout: { hideOverlap: true },
+          data: data.length ? data : [{ name: '暂无数据', value: 0, itemStyle: { color: '#5c6b7d' } }]
+        }]
+      }, true);
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

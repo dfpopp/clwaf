@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>等候室</title>
+ <script>
+ (function () {
+ try {
+ var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+ document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+ } catch (e) {
+ document.documentElement.setAttribute('data-theme', 'light');
+ }
+ })();
+ </script>
+ <link rel="stylesheet" href="../../static/css/reset.css">
+ <link rel="stylesheet" href="../../static/css/common.css">
+ <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+ <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+ <link rel="stylesheet" href="../../static/css/element-reset.css">
+ <link rel="stylesheet" href="../../static/css/table.css">
+ <style>
+ /* ============================================================
+ 等候室页面样式（对齐爬虫IP页的深浅色体系）
+ ============================================================ */
+ html, body { height: 100%; }
+ #app { height: 100%; }
+ .page-container { height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box; background: var(--content-gradient), var(--bg-body); }
+ .page-container::-webkit-scrollbar { width: 6px; }
+ .page-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+ /* ===== 统计卡片 ===== */
+ .stats-row { margin-bottom: 16px; }
+ .stats-row .el-col { margin-bottom: 0; }
+ .mini-stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; gap: 14px; height: 100%; box-sizing: border-box; }
+ .mini-stat .ms-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+ .mini-stat .ms-label { font-size: 12px; color: var(--text-secondary); }
+ .mini-stat .ms-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+ .icon-blue { background: var(--accent-soft); color: var(--accent); }
+ .icon-green { background: rgba(34,197,94,0.12); color: var(--success); }
+ .icon-gray { background: rgba(107,114,128,0.12); color: var(--text-muted); }
+ .icon-purple { background: rgba(139,92,246,0.12); color: var(--purple); }
+
+ /* ===== 说明条 ===== */
+ .tip-bar { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; margin-bottom: 16px; border-radius: var(--radius); background: var(--accent-soft); color: var(--text-secondary); font-size: 12px; line-height: 1.7; }
+ .tip-bar i { color: var(--accent); margin-top: 2px; }
+
+ /* ===== 列表卡片 ===== */
+ .list-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
+ .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+ .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 10px; }
+
+ /* ===== 表格工具类 ===== */
+ .mono { font-family: "SF Mono", Consolas, monospace; color: var(--text-primary); }
+ .text-muted { color: var(--text-muted); }
+ .row-actions { display: inline-flex; gap: 6px; }
+ .row-actions .el-button + .el-button { margin-left: 0; }
+ .uri-cell { font-size: 12px; }
+
+ /* ===== 状态/标记标签配色 ===== */
+ .el-tag.tag-pending, .el-tag.tag-passed, .el-tag.tag-left, .el-tag.tag-prio { border: none !important; }
+ .el-tag.tag-pending { background: rgba(245,158,11,0.12) !important; color: var(--warning) !important; }
+ .el-tag.tag-passed { background: rgba(34,197,94,0.12) !important; color: var(--success) !important; }
+ .el-tag.tag-left { background: rgba(107,114,128,0.12) !important; color: var(--text-muted) !important; }
+ .el-tag.tag-prio { background: rgba(139,92,246,0.12) !important; color: var(--purple) !important; }
+
+ /* ===== 深浅色兜底 ===== */
+ .el-input__wrapper { background-color: var(--bg-card) !important; box-shadow: 0 0 0 1px var(--border) inset !important; }
+ .el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+ .el-input__inner { color: var(--text-primary) !important; }
+ .el-button--default { background-color: transparent !important; border-color: var(--border) !important; color: var(--text-secondary) !important; }
+ .el-button--default:hover { background-color: transparent !important; border-color: var(--accent) !important; color: var(--accent) !important; }
+ .el-button--primary { background-color: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
+ .el-pagination button, .el-pagination .el-pager li { background-color: var(--bg-card) !important; border: 1px solid var(--border); color: var(--text-secondary) !important; }
+ .el-pagination .el-pager li.is-active { background-color: var(--accent) !important; color: #fff !important; border-color: var(--accent); }
+
+ @media (max-width: 768px) {
+ .page-container { padding: 14px; }
+ .stats-row .el-col { margin-bottom: 10px; }
+ .toolbar { flex-direction: column; align-items: stretch; }
+ .toolbar-right { justify-content: flex-start; }
+ }
+ </style>
+</head>
+<body>
+<div id="app" v-cloak>
+ <div class="page-container">
+ <!-- ===== 统计卡片 ===== -->
+ <el-row :gutter="16" class="stats-row">
+ <el-col :xs="12" :sm="12" :md="6" v-for="s in statCards" :key="s.key">
+ <div class="mini-stat">
+ <div class="ms-icon" :class="s.iconClass"><i :class="'fa-solid ' + s.icon"></i></div>
+ <div>
+ <div class="ms-label">{{ s.label }}</div>
+ <div class="ms-value">{{ s.value }}</div>
+ </div>
+ </div>
+ </el-col>
+ </el-row>
+
+ <!-- ===== 说明 ===== -->
+ <div class="tip-bar">
+ <i class="fa-solid fa-circle-info"></i>
+ <div>当 CC 防护触发等待队列时，进入等候室的请求会在此记录（默认展示"排队中"，保留24小时，超期自动清理）。可输入 IP 搜索客户，点击"插队"可把该请求排到队首，使其成为下一个被放行的请求。</div>
+ </div>
+
+ <!-- ===== 列表 ===== -->
+ <div class="list-card">
+ <div class="toolbar">
+ <div class="toolbar-left">
+ <el-input v-model="keyword" placeholder="搜索IP地址..." clearable style="width:220px" @input="keywordInput">
+ <template #prefix><i class="fa-solid fa-magnifying-glass"></i></template>
+ </el-input>
+ <el-select v-model="status" placeholder="状态" style="width:130px" @change="reloadPage">
+ <el-option label="排队中" :value="0"></el-option>
+ <el-option label="已放行" :value="1"></el-option>
+ <el-option label="已退出" :value="2"></el-option>
+ <el-option label="全部" :value="-1"></el-option>
+ </el-select>
+ <el-select v-model="isApi" placeholder="接口类型" style="width:140px" @change="reloadPage">
+ <el-option label="API接口" :value="1"></el-option>
+ <el-option label="Web页面" :value="0"></el-option>
+ <el-option label="全部" :value="-1"></el-option>
+ </el-select>
+ </div>
+ <div class="toolbar-right">
+ <el-button @click="load"><i class="fa-solid fa-rotate"></i> 刷新</el-button>
+ <el-button type="warning" plain @click="openCleanupStale"><i class="fa-solid fa-user-xmark"></i> 清理失效记录</el-button>
+ <el-button type="danger" plain @click="openCleanup"><i class="fa-solid fa-broom"></i> 清空过期记录</el-button>
+ </div>
+ </div>
+
+ <el-table :data="pageData" row-key="id" style="width:100%" empty-text="暂无等候室记录">
+ <el-table-column label="ID" width="70" align="center">
+ <template #default="{ row }"><span class="text-muted">{{ row.id }}</span></template>
+ </el-table-column>
+ <el-table-column label="站点" width="70" align="center">
+ <template #default="{ row }"><span class="text-muted">#{{ row.site_id }}</span></template>
+ </el-table-column>
+ <el-table-column label="IP地址" min-width="140">
+ <template #default="{ row }"><span class="mono">{{ row.client_ip }}</span></template>
+ </el-table-column>
+ <el-table-column label="排队位置" width="100" align="center">
+ <template #default="{ row }">
+ <span v-if="row.status === 0 && row.position >= 0" class="mono">第 {{ row.position + 1 }} 位</span>
+ <span v-else-if="row.status === 0" class="text-muted">已出队</span>
+ <span v-else class="text-muted">—</span>
+ </template>
+ </el-table-column>
+ <el-table-column label="请求URI" min-width="200" show-overflow-tooltip>
+ <template #default="{ row }"><span class="uri-cell mono">{{ row.uri }}</span></template>
+ </el-table-column>
+ <el-table-column label="User-Agent" min-width="200" show-overflow-tooltip>
+ <template #default="{ row }"><span class="text-muted uri-cell">{{ row.ua || '—' }}</span></template>
+ </el-table-column>
+ <el-table-column label="接口类型" width="100" align="center">
+ <template #default="{ row }">
+ <el-tag :class="row.is_api === 1 ? 'tag-prio' : 'tag-left'" size="small">{{ row.is_api === 1 ? 'API接口' : 'Web页面' }}</el-tag>
+ </template>
+ </el-table-column>
+ <el-table-column label="状态" width="90" align="center">
+ <template #default="{ row }">
+ <el-tag :class="statusTag(row.status).cls" size="small">{{ statusTag(row.status).text }}</el-tag>
+ </template>
+ </el-table-column>
+ <el-table-column label="插队标记" width="90" align="center">
+ <template #default="{ row }">
+ <el-tag v-if="row.priority === 1" class="tag-prio" size="small">已插队</el-tag>
+ <span v-else class="text-muted">—</span>
+ </template>
+ </el-table-column>
+ <el-table-column label="入队时间" width="170">
+ <template #default="{ row }"><span class="text-muted">{{ row.create_time }}</span></template>
+ </el-table-column>
+ <el-table-column label="操作" width="110" fixed="right">
+ <template #default="{ row }">
+ <div class="row-actions">
+ <el-button size="small" type="primary" plain :disabled="row.status !== 0" @click="openSkip(row)">
+ <i class="fa-solid fa-forward"></i> 插队
+ </el-button>
+ </div>
+ </template>
+ </el-table-column>
+ </el-table>
+
+ <el-pagination
+ background
+ layout="prev, pager, next, total"
+ :total="total"
+ :page-size="pageSize"
+ :current-page="currentPage"
+ @current-change="handlePageChange">
+ </el-pagination>
+ </div>
+ </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+ data() {
+ return {
+ rows: [],
+ total: 0,
+ currentPage: 1,
+ pageSize: 20,
+ keyword: '',
+ status: 0,
+ isApi: -1,
+ stats: { queueing: 0, passed: 0, left: 0, priority: 0 },
+ timer: null
+ };
+ },
+ computed: {
+ statCards() {
+ return [
+ { key: 'queueing', label: '排队中', value: this.stats.queueing, icon: 'fa-hourglass-half', iconClass: 'icon-blue' },
+ { key: 'passed', label: '已放行', value: this.stats.passed, icon: 'fa-check', iconClass: 'icon-green' },
+ { key: 'left', label: '已退出', value: this.stats.left, icon: 'fa-right-from-bracket', iconClass: 'icon-gray' },
+ { key: 'priority', label: '已插队', value: this.stats.priority, icon: 'fa-forward', iconClass: 'icon-purple' }
+ ];
+ },
+ pageData() { return this.rows; }
+ },
+ mounted() {
+ ThemeManager.init();
+ this.load();
+ this.loadStats();
+ this.timer = setInterval(() => { this.loadStats(); }, 10000);
+ window.onSearch = () => this.load();
+ },
+ beforeUnmount() {
+ if (this.timer) clearInterval(this.timer);
+ },
+ methods: {
+ buildParams() {
+ return {
+ page: this.currentPage,
+ page_size: this.pageSize,
+ keyword: this.keyword || '',
+ status: this.status,
+ is_api: this.isApi
+ };
+ },
+ load() {
+ App.api.waitingRoom.list(this.buildParams()).then(({ list, count }) => {
+ this.rows = (list || []).map(r => ({
+ id: r.id, site_id: r.site_id, client_ip: r.client_ip, uri: r.uri, ua: r.ua, is_api: r.is_api != null ? r.is_api : 0,
+ status: r.status, priority: r.priority, position: r.position != null ? r.position : -1,
+ queue_id: r.queue_id, create_time: r.create_time
+ }));
+ this.total = count || 0;
+ }).catch(() => {});
+ },
+ loadStats() {
+ App.api.waitingRoom.stats().then(s => {
+ this.stats = {
+ queueing: s.queueing || 0,
+ passed: s.passed || 0,
+ left: s.left || 0,
+ priority: s.priority || 0
+ };
+ }).catch(() => {});
+ },
+ keywordInput() { this.currentPage = 1; },
+ reloadPage() { this.currentPage = 1; this.load(); },
+ handlePageChange(page) { this.currentPage = page; this.load(); },
+ statusTag(status) {
+ if (status === 0) return { text: '排队中', cls: 'tag-pending' };
+ if (status === 1) return { text: '已放行', cls: 'tag-passed' };
+ return { text: '已退出', cls: 'tag-left' };
+ },
+ openSkip(row) {
+ const h = Vue.h;
+ ElementPlus.ElMessageBox({
+ title: '插队确认',
+ message: h('div', null, [
+ h('p', null, ['确定把 IP ', h('span', { class: 'mbx-highlight' }, row.client_ip), ' 的请求插队到队首吗？']),
+ h('p', null, '插队后该请求将成为下一个被放行的请求。')
+ ]),
+ showCancelButton: true,
+ confirmButtonText: '确认插队',
+ cancelButtonText: '取消',
+ confirmButtonType: 'primary',
+ cancelButtonType: 'default',
+ customClass: 'mb-del',
+ autofocus: false,
+ closeOnClickModal: false
+ }).then(() => App.api.waitingRoom.bypass(row.queue_id ? row.queue_id : ''))
+ .then(() => {
+ ElementPlus.ElMessage({ message: '插队成功', type: 'success', duration: 2000 });
+ this.load(); this.loadStats();
+ }).catch(() => {});
+ },
+ openCleanup() {
+ ElementPlus.ElMessageBox({
+ title: '清空确认',
+ message: '将删除超过24小时的等候室记录，且不可恢复。确定执行吗？',
+ showCancelButton: true,
+ confirmButtonText: '确认清空',
+ cancelButtonText: '取消',
+ confirmButtonType: 'danger',
+ cancelButtonType: 'default',
+ customClass: 'mb-del',
+ autofocus: false,
+ closeOnClickModal: false
+ }).then(() => App.api.waitingRoom.cleanupNow())
+ .then(() => {
+ ElementPlus.ElMessage({ message: '清理完成', type: 'success', duration: 2000 });
+ this.load(); this.loadStats();
+ }).catch(() => {});
+ },
+ openCleanupStale() {
+ ElementPlus.ElMessageBox({
+ title: '清理失效记录',
+ message: '将把"排队中"但已不在队列中（客户端超时离开/历史残留）的记录标记为已退出。确定执行吗？',
+ showCancelButton: true,
+ confirmButtonText: '确认清理',
+ cancelButtonText: '取消',
+ confirmButtonType: 'warning',
+ cancelButtonType: 'default',
+ customClass: 'mb-del',
+ autofocus: false,
+ closeOnClickModal: false
+ }).then(() => App.api.waitingRoom.cleanupStale())
+ .then((res) => {
+ const n = (res && res.cleaned) != null ? res.cleaned : 0;
+ ElementPlus.ElMessage({ message: n > 0 ? '已失效 ' + n + ' 条记录' : '无失效记录', type: 'success', duration: 2000 });
+ this.load(); this.loadStats();
+ }).catch(() => {});
+ }
+ }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>

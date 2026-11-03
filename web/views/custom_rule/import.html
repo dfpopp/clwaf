@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批量导入自定义规则</title>
+  <script>
+    (function () {
+      try {
+        var cfg = JSON.parse(localStorage.getItem('admin_theme_config') || 'null');
+        document.documentElement.setAttribute('data-theme', (cfg && cfg.theme) || 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/css/reset.css">
+  <link rel="stylesheet" href="../../static/css/common.css">
+  <link rel="stylesheet" href="../../static/lib/element-plus/index.css">
+  <link rel="stylesheet" href="../../static/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="../../static/css/element-reset.css">
+  <style>
+    /* ============================================================
+       批量导入自定义规则弹窗页（iframe，与 add.html 同壳）：
+       每行一条（| 分隔），按目标/算子中文名反查字典值，IP组算子按组名转 id
+       ============================================================ */
+    html, body { height: 100%; background: var(--bg-card); }
+    #app { height: 100%; }
+    .edit-container { height: 100%; box-sizing: border-box; padding: 16px 20px 0; display: flex; flex-direction: column; }
+    .edit-body { flex: 1; overflow-y: auto; }
+    .edit-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 0 16px; border-top: 1px solid var(--border); margin-top: 8px; }
+    .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
+
+    .el-button--default { background-color: transparent !important; border-color: var(--border) !important; color: var(--text-secondary) !important; }
+    .el-button--default:hover { background-color: transparent !important; border-color: var(--accent) !important; color: var(--accent) !important; }
+    .el-button--primary { background-color: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
+    .el-textarea__inner { background-color: var(--bg-card) !important; box-shadow: 0 0 0 1px var(--border) inset !important; color: var(--text-primary) !important; }
+    .el-textarea__inner:focus { box-shadow: 0 0 0 1px var(--accent) inset !important; }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="edit-container">
+    <div class="edit-body">
+      <el-form label-position="top" @submit.prevent="confirmImport">
+        <el-form-item label="规则数据 *">
+          <el-input v-model="importData" type="textarea" :rows="9" placeholder="每行一条，用 | 分隔，格式：规则名称 | 匹配目标 | 匹配算子 | 匹配值 | 动作 | 重定向URL(可选)
+
+示例：
+SQL注入防护 | URI | 包含 | union select | 直接拦截
+恶意UA验证 | UA | 包含 | sqlmap | 人机验证
+后台访问跳转 | URI | 正则匹配 | ^/admin\.php$ | 302重定向 | https://www.gc-zb.com/safe
+端口扫描观察 | URI | 正则匹配 | (:22|:3389) | 观察"></el-input>
+          <div class="form-hint">匹配目标：源IP/URI/Header/Query/Cookie/Method/UA/Body等；匹配算子：等于/不等于/包含/不包含/正则匹配/属于IP组/不属于IP组（值填IP组名）；动作：观察/直接拦截/人机验证/302重定向</div>
+          <div class="form-hint">当前导入范围：<span style="color:var(--accent)">{{ scopeTip }}</span></div>
+        </el-form-item>
+      </el-form>
+    </div>
+    <div class="edit-footer">
+      <el-button @click="onCancel"><i class="fa-solid fa-xmark"></i> 取消</el-button>
+      <el-button type="primary" :disabled="saving" @click="confirmImport"><i class="fa-solid fa-check"></i> 导入</el-button>
+    </div>
+  </div>
+</div>
+
+<script src="../../static/js/config/theme.js"></script>
+<script src="../../static/js/config/locale.js"></script>
+<script src="../../static/lib/vue.min.js"></script>
+<script src="../../static/lib/element-plus/index.js"></script>
+<script src="../../static/lib/element-plus-icons/index.js"></script>
+<script src="../../static/js/api.js"></script>
+<script src="../../static/js/ui.js"></script>
+<script src="../../static/js/common.js"></script>
+<script>
+const { createApp } = Vue;
+const app = createApp({
+  data() {
+    return {
+      siteId: 0,
+      scopeTip: '',
+      importData: '',
+      saving: false,
+      ipGroups: [],
+      // 目标/算子字典与列表页导入同源（免费集 + IP 组算子，按中文名或英文值匹配）
+      targetOpts: App.ui.targetOptions(),
+      opOpts: [...App.ui.operatorOptions(), { value: 'in_ip_group', label: '属于IP组' }, { value: 'not_in_ip_group', label: '不属于IP组' }],
+      actionParse: { '观察': 'observe', '直接拦截': 'block', '拦截': 'block', '人机验证': 'challenge', '302重定向': 'redirect', '重定向': 'redirect' }
+    };
+  },
+  mounted() {
+    ThemeManager.init();
+    const params = new URLSearchParams(window.location.search);
+    this.siteId = parseInt(params.get('site_id'), 10) || 0;
+    // 导入范围提示：按父页传入的 site_id 反查站点名
+    App.api.site.list(1, 100).then(({ list }) => {
+      const s = (list || []).find(x => x.id === this.siteId);
+      this.scopeTip = this.siteId > 0 && s ? ('站点私有规则 · ' + s.name) : '全局规则（所有站点生效）';
+    }).catch(() => {
+      this.scopeTip = this.siteId > 0 ? ('站点私有规则 · 站点#' + this.siteId) : '全局规则（所有站点生效）';
+    });
+    // IP 组算子按组名转 ip_group:<id>，需要启用中的 IP 组列表
+    App.api.ipGroup.list(1, 100).then(({ list }) => { this.ipGroups = list || []; }).catch(() => {});
+  },
+  methods: {
+    confirmImport() {
+      const raw = this.importData.trim();
+      if (!raw) { ElementPlus.ElMessage.error('请输入规则数据'); return; }
+      const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      let added = 0, failed = 0;
+      const payload = [];
+      lines.forEach(line => {
+        const parts = line.split('|').map(s => s.trim());
+        if (parts.length < 5) { failed++; return; }
+        const [name, targetLabel, opLabel, value, actLabel] = parts;
+        const target = this.targetOpts.find(o => o.label === targetLabel || o.value === targetLabel);
+        const op = this.opOpts.find(o => o.label === opLabel || o.value === opLabel);
+        const action = this.actionParse[actLabel] || actLabel;
+        if (!name || !value || !target || !op || !action) { failed++; return; }
+        // IP 组算子：值填 IP 组名，转 ip_group:<id>，目标固定源IP
+        const isGroupOp = op.value === 'in_ip_group' || op.value === 'not_in_ip_group';
+        const condTarget = isGroupOp ? 'ip' : target.value;
+        let condValue = value;
+        if (isGroupOp) {
+          const g = this.ipGroups.find(x => x.name === value);
+          if (!g) { failed++; return; }
+          condValue = 'ip_group:' + g.id;
+        }
+        payload.push({
+          site_id: this.siteId,
+          name: name,
+          conditions: JSON.stringify([{ conditions: [{ target: condTarget, operator: op.value, value: condValue, field: '' }] }]),
+          action: action,
+          logic: 'and',
+          status: 1
+        });
+        added++;
+      });
+      if (!payload.length) { ElementPlus.ElMessage.error('未导入任何规则，请检查格式'); return; }
+      this.saving = true;
+      let chain = Promise.resolve();
+      payload.forEach(item => { chain = chain.then(() => App.api.customRule.save(item)); });
+      chain.then(() => {
+        DialogBridge.close({ id: 'cr_import', msg: `成功导入 ${added} 条规则${failed ? `，${failed} 条格式错误已跳过` : ''}`, refresh: true });
+      }).catch(() => {}).finally(() => { this.saving = false; });
+    },
+    onCancel() {
+      DialogBridge.close({ id: 'cr_import', msg: '', refresh: false });
+    }
+  }
+});
+for (const [name, comp] of Object.entries(ElementPlusIconsVue)) app.component(name, comp);
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.mount('#app');
+</script>
+</body>
+</html>
