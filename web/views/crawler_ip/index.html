@@ -296,8 +296,9 @@ const app = createApp({
     /* 平台共享库弹窗（M4）：平台聚合下发的爬虫 IP（本地启停，停用后引擎游标感知不再拦截） */
     openShared() {
       this.sharedModal.show = true;
-      App.request('/api/crawlerIp/shared', { page: 1, page_size: 100 }).then(({ list }) => {
-        this.sharedModal.list = list || [];
+      /* App.request 仅返回响应的 data 字段（= 行数组本身）；解构 { list } 取不到值导致弹窗恒空 */
+      App.request('/api/crawlerIp/shared', { page: 1, page_size: 100 }).then((rows) => {
+        this.sharedModal.list = rows || [];
       }).catch(() => {});
     },
     toggleShared(row, on) {

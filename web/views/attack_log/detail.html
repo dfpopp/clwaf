@@ -45,6 +45,25 @@
     .detail-section { font-size: 12px; color: var(--text-secondary); margin: 4px 0 8px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
     .json-block { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; line-height: 1.5; margin-bottom: 16px; }
 
+    /* 请求参数快照（误报反馈） */
+    .snap-k { flex-shrink: 0; width: 64px; color: var(--text-muted); font-size: 11px; }
+    .snap-line { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .snap-line .json-block { flex: 1; margin-bottom: 0; max-height: 120px; }
+    .snap-trunc { color: var(--text-muted); font-size: 11px; }
+    .snap-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 16px; }
+    .snap-table th, .snap-table td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; word-break: break-all; vertical-align: top; }
+    .snap-table th { background: var(--bg-input); color: var(--text-muted); font-weight: 600; width: 140px; white-space: nowrap; }
+    .snap-table td { font-family: "SF Mono", Consolas, monospace; color: var(--text-secondary); }
+    .snap-masked { color: #f87171; }
+
+    /* 反馈误报指引弹窗 */
+    .fb-steps { font-size: 13px; color: var(--text-secondary); line-height: 1.9; }
+    .fb-steps b { color: var(--text-primary); }
+    .fb-step-title { font-weight: 600; color: var(--text-primary); margin: 10px 0 4px; }
+    .fb-hint { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.35); border-radius: 8px; padding: 8px 12px; color: #b45309; font-size: 12px; line-height: 1.7; margin-bottom: 6px; }
+    html[data-theme="dark"] .fb-hint { color: #fbbf24; }
+    .fb-btns { display: flex; gap: 10px; margin: 10px 0 2px; }
+
     /* 底部操作条（吸底） */
     .ap-footer { flex-shrink: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
     .ap-tip { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; }
@@ -73,12 +92,58 @@
     </dl>
     <div v-if="row.headers" class="detail-section"><el-icon :size="13"><component :is="'Tickets'"/></el-icon> 请求头</div>
     <pre v-if="row.headers" class="json-block">{{ row.headers }}</pre>
+    <!-- 请求参数快照：内置攻击拦截才有（detail 列，值已脱敏截断） -->
+    <template v-if="snap">
+      <div class="detail-section">
+        <el-icon :size="13"><component :is="'Document'"/></el-icon> 请求参数
+        <el-button size="small" type="warning" plain style="margin-left:auto;" @click="fbVisible = true">
+          <el-icon :size="12" style="margin-right:3px;"><component :is="'ChatDotRound'"/></el-icon> 反馈误报
+        </el-button>
+      </div>
+      <div class="snap-line"><span class="snap-k">命中参数</span><span class="mono" style="font-size:12px;">{{ snap.param_key || '-' }}</span></div>
+      <div class="snap-line"><span class="snap-k">命中片段</span><pre class="json-block">{{ snap.snippet || '-' }}</pre></div>
+      <div class="snap-line" v-if="snap.params && snap.params.length">
+        <span class="snap-k">参数列表</span>
+        <span class="snap-trunc" v-if="snap.truncated">（数据过大已截断）</span>
+        <span class="snap-trunc" v-else>（敏感字段已脱敏，值超长已截断）</span>
+      </div>
+      <table class="snap-table" v-if="snap.params && snap.params.length">
+        <tr v-for="(p, i) in snap.params" :key="i">
+          <th>{{ p.k }}</th>
+          <td><span v-if="p.v === '***'" class="snap-masked">***</span><template v-else>{{ p.v }}</template></td>
+        </tr>
+      </table>
+    </template>
     <template v-if="row.challenge_diag">
       <div class="detail-section"><el-icon :size="13"><component :is="'Document'"/></el-icon> 人机验证诊断明细</div>
       <pre class="json-block" style="max-height:320px;">{{ row.challenge_diag }}</pre>
     </template>
   </div>
   <div class="ap-tip" v-else>{{ tip }}</div>
+
+  <!-- 反馈误报指引弹窗 -->
+  <el-dialog v-model="fbVisible" title="反馈误报" width="520px" append-to-body>
+    <div class="fb-steps">
+      <div class="fb-hint">
+        <b>第一步：先解除当前困扰（推荐）</b><br>
+        建议先将您的出口 IP 加入站点白名单（后台 → 站点管理 → 对应站点 → 白名单），
+        可立即恢复正常访问；确认误报修复后再移除白名单。
+      </div>
+      <div class="fb-step-title">第二步：复制发帖模板</div>
+      模板已包含拦截规则、命中片段与请求参数（敏感字段已脱敏）。点击下方按钮复制到剪贴板。
+      <div class="fb-step-title">第三步：到官方论坛发帖</div>
+      进入论坛 <b>问答专区</b>，帖子类型选择 <b>问答</b>，标题填“【误报反馈】+ 规则名”，
+      正文粘贴模板内容，建议附上您当时操作的截图，方便我们快速定位。
+      <div class="fb-btns">
+        <el-button type="primary" @click="copyTemplate">
+          <el-icon :size="13" style="margin-right:3px;"><component :is="'CopyDocument'"/></el-icon> 复制发帖模板
+        </el-button>
+        <el-button @click="openForum">
+          <el-icon :size="13" style="margin-right:3px;"><component :is="'Link'"/></el-icon> 打开论坛
+        </el-button>
+      </div>
+    </div>
+  </el-dialog>
 
   <div class="ap-footer">
     <el-button @click="close"><el-icon :size="13" style="margin-right:3px;"><component :is="'Close'"/></el-icon> 关闭</el-button>
@@ -100,14 +165,19 @@ const DIALOG_ID = 'al_detail';
 
 const app = createApp({
   data() {
-    return { row: null, tip: '加载中…' };
+    return { row: null, tip: '加载中…', snap: null, fbVisible: false };
   },
   mounted() {
     ThemeManager.init();
+    // 版本信息用于发帖模板；主框架已加载则直接用，否则此处补拉（失败静默）
+    if (!App.info) { App.loadInfo(); }
     const id = new URLSearchParams(window.location.search).get('id');
     if (!id) { this.tip = '缺少记录 ID'; return; }
     App.api.attackLog.detail(id).then((d) => {
-      if (d) { this.row = d; } else { this.tip = '记录不存在或已过期'; }
+      if (d) {
+        this.row = d;
+        this.parseSnap(d.detail);
+      } else { this.tip = '记录不存在或已过期'; }
     }).catch(() => { this.tip = '加载失败'; });
   },
   methods: {
@@ -118,6 +188,56 @@ const app = createApp({
         return;
       }
       if (history.length > 1) history.back();
+    },
+    /* 解析参数快照（引擎侧 kind=req_params 才渲染；老数据/挑战类无此字段） */
+    parseSnap(raw) {
+      if (!raw) return;
+      try {
+        const o = JSON.parse(raw);
+        if (o && o.kind === 'req_params') this.snap = o;
+      } catch (e) { /* 非快照格式忽略 */ }
+    },
+    /* 生成发帖模板（纯文本；参数为引擎侧已脱敏内容，可直接公开） */
+    buildTemplate() {
+      const r = this.row, s = this.snap || {};
+      const params = (s.params || []).map((p) => '  - ' + p.k + ': ' + p.v).join('\n') || '  （无）';
+      const ver = (App.info && (App.info.version || App.info.app_version)) || '';
+      return '【误报反馈】' + (r.rule_name || s.param_key || '内置攻击规则') + '\n\n' +
+        '拦截时间：' + (r.create_time || '-') + '\n' +
+        '请求URI：' + (r.uri || '-') + '\n' +
+        '请求方法：' + (r.method || '-') + '\n' +
+        '源IP：' + (r.client_ip || '-') + '\n' +
+        '命中参数：' + (s.param_key || '-') + '\n' +
+        '命中片段：' + (s.snippet || '-') + '\n' +
+        '请求参数（已脱敏）：\n' + params + '\n' +
+        (ver ? 'WAF版本：' + ver + '\n' : '') +
+        '\n问题描述：\n（请补充：您当时在做什么操作？期望的结果是什么？）';
+    },
+    /* 复制发帖模板：优先 clipboard API（https），降级 execCommand（http 后台） */
+    copyTemplate() {
+      const text = this.buildTemplate();
+      const done = () => ElementPlus.ElMessage.success('模板已复制，请到论坛粘贴发帖');
+      const fail = () => ElementPlus.ElMessage.error('复制失败，请手动选中复制');
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done).catch(() => this.legacyCopy(text) ? done() : fail());
+        return;
+      }
+      this.legacyCopy(text) ? done() : fail();
+    },
+    legacyCopy(text) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (e) { return false; }
+    },
+    openForum() {
+      window.open('https://www.clwaf.com/forum', '_blank');
     },
     attackLabel(v) { return App.ui.attackLabel(v); },
     actionLabel(v) { return App.ui.actionLabel(v); },

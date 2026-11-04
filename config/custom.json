@@ -2,5 +2,5 @@
   "admin_session_secret": "",
   "admin_cookie_name": "waf_session",
   "license_secret": "",
-  "platform_base_url": ""
+  "platform_base_url": "https://www.clwaf.com/"
 }
