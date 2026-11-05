@@ -148,6 +148,9 @@
  <span v-else class="text-muted">—</span>
  </template>
  </el-table-column>
+ <el-table-column label="排队原因" min-width="180" show-overflow-tooltip>
+ <template #default="{ row }"><span class="text-muted">{{ row.queue_reason || '—' }}</span></template>
+ </el-table-column>
  <el-table-column label="请求URI" min-width="200" show-overflow-tooltip>
  <template #default="{ row }"><span class="uri-cell mono">{{ row.uri }}</span></template>
  </el-table-column>

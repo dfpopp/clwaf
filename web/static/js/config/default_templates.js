@@ -515,7 +515,7 @@ h1{font-size:20px;margin-bottom:10px;font-weight:700}
   {{if not .LogoURL}}<div class="icon" style="background:rgba(96,165,250,0.12)"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>{{end}}
   {{if .LogoURL}}<div class="logo"><img src="{{.LogoURL}}" alt="logo"></div>{{end}}
   <h1>排队等候中</h1>
-  <p class="desc">当前访问人数较多，您已进入等候室，页面将自动刷新。</p>
+  <p class="desc">{{.QueueReason}}，您已进入等候室，页面将自动刷新。</p>
   <div class="queue-card">
     <div class="queue-pos" id="queuePos">{{.Position}}</div>
     <div class="queue-sub">您的排队序号</div>
@@ -610,7 +610,7 @@ function guard(){
   },500);
 }
 function demo(){
-  var m={'{{.SiteName}}':'官网主站','{{.RequestID}}':'Req-20260818-001234','{{.Reason}}':'SQL注入特征匹配','{{.ClientIP}}':'203.0.113.45','{{.Time}}':'2026-08-18 14:30:00','{{.Position}}':'12','{{.FrontCount}}':'8'};
+  var m={'{{.SiteName}}':'官网主站','{{.RequestID}}':'Req-20260818-001234','{{.Reason}}':'SQL注入特征匹配','{{.ClientIP}}':'203.0.113.45','{{.Time}}':'2026-08-18 14:30:00','{{.Position}}':'12','{{.QueueReason}}':'应用级访问阈值'};
   try{
     var w=document.createTreeWalker(document.body,4,null,false);
     while(w.nextNode()){
@@ -682,6 +682,151 @@ h1{font-size:20px;margin-bottom:10px;font-weight:700}
   {{if .LogoURL}}<div class="logo"><img src="{{.LogoURL}}" alt="logo"></div>{{end}}
   <h1 style="font-size:22px">服务繁忙，请稍后再试</h1>
   <p class="desc">当前排队人数已达上限，您暂时无法进入等候室。<br>请稍后重新访问，给您带来不便敬请谅解。</p>
+  <div class="info">
+<div class="row"><span class="k">站点名称</span><span class="v">{{.SiteName}}</span></div>
+    <div class="row"><span class="k">触发时间</span><span class="v">{{.Time}}</span></div>
+    <div class="row"><span class="k">客户端IP</span><span class="v">{{.ClientIP}}</span></div>
+  </div>
+  <div class="tip" style="text-align:center">请求编号：{{.RequestID}}</div>
+</div>
+<script>
+(function(){
+var P=(window.__WAF_PREVIEW__===1)||(/[?&]preview=1/.test(window.location.search));
+var C=window.__c||'';
+var LIVE=(!P)&&!!C&&(C.indexOf('{')<0);
+var K='waf#2026$collect';
+function ep(n){return '/waf-cha'+'llenge/'+n;}
+function post(n,kv,ok,fail){
+  var q=[];
+  for(var k in kv){q.push(encodeURIComponent(k)+'='+encodeURIComponent(kv[k]));}
+  var x=new XMLHttpRequest();
+  x.open('POST',ep(n),true);
+  x.setRequestHeader('Content-Type','application/x-www-form-urlencoded;charset=UTF-8');
+  x.onreadystatechange=function(){
+    if(x.readyState!==4)return;
+    var j=null;try{j=JSON.parse(x.responseText);}catch(e){}
+    if(x.status>=200&&x.status<400&&j){if(ok)ok(j);}else{if(fail)fail();}
+  };
+  x.send(q.join('&'));
+}
+function b64x(s){
+  var u=unescape(encodeURIComponent(s)),o='';
+  for(var i=0;i<u.length;i++){o+=String.fromCharCode(u.charCodeAt(i)^K.charCodeAt(i%K.length));}
+  return btoa(o);
+}
+function chash(){
+  try{
+    var cv=document.createElement('canvas');cv.width=220;cv.height=40;
+    var g=cv.getContext('2d');
+    g.textBaseline='top';g.font='15px Arial';g.fillStyle='#f60';g.fillRect(0,0,110,20);
+    g.fillStyle='#069';g.fillText('WAF~#\\u4e2d\\u6587@258',2,2);
+    g.fillStyle='rgba(102,204,0,0.7)';g.fillText('WAF~#\\u4e2d\\u6587@258',4,17);
+    var d=cv.toDataURL(),h=0;
+    for(var i=0;i<d.length;i++){h=(h*31+d.charCodeAt(i))|0;}
+    return (h>>>0).toString(16);
+  }catch(e){return '';}
+}
+function wgl(){
+  try{
+    var cv=document.createElement('canvas');
+    var gl=cv.getContext('webgl')||cv.getContext('experimental-webgl');
+    if(!gl)return ['',''];
+    var di=gl.getExtension('WEBGL_debug_renderer_info');
+    return di?[gl.getParameter(di.UNMASKED_VENDOR_WEBGL),gl.getParameter(di.UNMASKED_RENDERER_WEBGL)]:[gl.getParameter(gl.VENDOR),gl.getParameter(gl.RENDERER)];
+  }catch(e){return ['',''];}
+}
+function collect(){
+  var w=wgl(),n=navigator;
+  return{ua:n.userAgent,lg:n.language,ls:(n.languages||[]).join(','),pl:n.platform,
+    hc:n.hardwareConcurrency||0,dm:n.deviceMemory||0,wd:n.webdriver===true?1:0,
+    sw:screen.width,sh:screen.height,cd:screen.colorDepth,dpr:window.devicePixelRatio||1,
+    tz:(window.Intl&&Intl.DateTimeFormat().resolvedOptions().timeZone)||'',tp:n.maxTouchPoints||0,
+    ce:n.cookieEnabled?1:0,pn:(n.plugins||[]).length,ch:window.chrome?1:0,
+    hd:/HeadlessChrome/i.test(n.userAgent)?1:0,ph:(window.callPhantom||window._phantom)?1:0,
+    sl:(window.__nightmare||window.domAutomation||window.domAutomationController)?1:0,
+    np:(window.Notification&&Notification.permission)||'',gv:w[0],gr:w[1],cv:chash(),ts:Date.now()};
+}
+function report(){
+  if(!LIVE)return;
+  var q=['cid='+encodeURIComponent(C),'d='+encodeURIComponent(b64x(JSON.stringify(collect())))];
+  try{
+    var x=new XMLHttpRequest();
+    x.open('POST','/waf-co'+'llect',true);
+    x.setRequestHeader('Content-Type','application/x-www-form-urlencoded;charset=UTF-8');
+    x.send(q.join('&'));
+  }catch(e){}
+}
+function guard(){
+  if(P)return;
+  window.addEventListener('keydown',function(e){
+    var k=e.key;
+    if(k==='F12'||k===123||(e.ctrlKey&&e.shiftKey&&(k==='I'||k==='J'||k==='C'))){e.preventDefault();e.stopPropagation();return false;}
+  },true);
+  window.addEventListener('contextmenu',function(e){e.preventDefault();return false;});
+  var win=window;
+  if(window.top!==window&&window.parent&&window.parent.outerWidth)win=window.parent;
+  var hits=0,dead=false;
+  function kill(){
+    if(dead)return;dead=true;
+    try{document.body.innerHTML='';}catch(e){}
+    (function st(){requestAnimationFrame(function(){debugger;requestAnimationFrame(st);});})();
+  }
+  setInterval(function(){
+    var ow=win.outerWidth,iw=win.innerWidth,oh=win.outerHeight,ih=win.innerHeight;
+    if(ow-iw>50||oh-ih>135){hits++;if(hits>=2)kill();}else{hits=0;}
+  },500);
+}
+function demo(){
+  var m={'{{.SiteName}}':'官网主站','{{.RequestID}}':'Req-20260818-001234','{{.Reason}}':'SQL注入特征匹配','{{.ClientIP}}':'203.0.113.45','{{.Time}}':'2026-08-18 14:30:00','{{.Position}}':'12','{{.FrontCount}}':'8'};
+  try{
+    var w=document.createTreeWalker(document.body,4,null,false);
+    while(w.nextNode()){
+      var t=w.currentNode,v=t.nodeValue;
+      if(v&&v.indexOf('{'+'{')>-1)t.nodeValue=v.replace(/\\{\\{\\.\\w+\\}\\}/g,function(x){return m[x]||x;});
+    }
+  }catch(e){}
+}
+guard();demo();try{report();}catch(e){}
+START(LIVE,C,P,post);
+});
+function START(LIVE,C,P,post){}
+</script>
+</body>
+</html>`,
+  server_error: `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="renderer" content="webkit">
+<meta name="force-rendering" content="webkit">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<title>源站不可用</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(135deg,#0d1218,#151b24);color:#e6edf3;height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{max-width:400px;width:100%;text-align:center}
+.icon{width:64px;height:64px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+h1{font-size:20px;margin-bottom:10px;font-weight:700}
+.desc{color:#8b98a9;line-height:1.7;margin-bottom:18px;font-size:13px}
+.msg{min-height:18px;font-size:12px;color:#f87171;margin-bottom:10px}
+.msg.ok{color:#4ade80}
+.info{background:rgba(255,255,255,0.03);border:1px solid #232c38;border-radius:10px;padding:14px 18px;margin-bottom:16px;text-align:left}
+.row{display:flex;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.row:last-child{border-bottom:0}
+.row .k{color:#5c6b7d}
+.row .v{color:#e6edf3;font-family:Consolas,monospace;text-align:right}
+.tip{font-size:12px;color:#5c6b7d}
+.tip code{font-family:Consolas,monospace;color:#8b98a9}
+.logo{text-align:center;margin-bottom:16px}.logo img{max-width:120px;max-height:48px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="box" style="max-width:480px">
+  {{if not .LogoURL}}<div class="icon" style="width:84px;height:84px;background:rgba(34,211,238,0.12)"><svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div>{{end}}
+  {{if .LogoURL}}<div class="logo"><img src="{{.LogoURL}}" alt="logo"></div>{{end}}
+  <h1 style="font-size:22px">源站暂时不可用</h1>
+  <p class="desc">防护系统无法连接到源站服务器，可能是源站维护或异常。<br>请稍后重试，或联系站点管理员。</p>
   <div class="info">
 <div class="row"><span class="k">站点名称</span><span class="v">{{.SiteName}}</span></div>
     <div class="row"><span class="k">触发时间</span><span class="v">{{.Time}}</span></div>
@@ -875,151 +1020,6 @@ window.__APP = {
 </script>
 </body>
 </html>`,
-  server_error: `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="renderer" content="webkit">
-<meta name="force-rendering" content="webkit">
-<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-<title>源站不可用</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(135deg,#0d1218,#151b24);color:#e6edf3;height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-.box{max-width:400px;width:100%;text-align:center}
-.icon{width:64px;height:64px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-h1{font-size:20px;margin-bottom:10px;font-weight:700}
-.desc{color:#8b98a9;line-height:1.7;margin-bottom:18px;font-size:13px}
-.msg{min-height:18px;font-size:12px;color:#f87171;margin-bottom:10px}
-.msg.ok{color:#4ade80}
-.info{background:rgba(255,255,255,0.03);border:1px solid #232c38;border-radius:10px;padding:14px 18px;margin-bottom:16px;text-align:left}
-.row{display:flex;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04)}
-.row:last-child{border-bottom:0}
-.row .k{color:#5c6b7d}
-.row .v{color:#e6edf3;font-family:Consolas,monospace;text-align:right}
-.tip{font-size:12px;color:#5c6b7d}
-.tip code{font-family:Consolas,monospace;color:#8b98a9}
-.logo{text-align:center;margin-bottom:16px}.logo img{max-width:120px;max-height:48px;border-radius:4px}
-</style>
-</head>
-<body>
-<div class="box" style="max-width:480px">
-  {{if not .LogoURL}}<div class="icon" style="width:84px;height:84px;background:rgba(34,211,238,0.12)"><svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div>{{end}}
-  {{if .LogoURL}}<div class="logo"><img src="{{.LogoURL}}" alt="logo"></div>{{end}}
-  <h1 style="font-size:22px">源站暂时不可用</h1>
-  <p class="desc">防护系统无法连接到源站服务器，可能是源站维护或异常。<br>请稍后重试，或联系站点管理员。</p>
-  <div class="info">
-<div class="row"><span class="k">站点名称</span><span class="v">{{.SiteName}}</span></div>
-    <div class="row"><span class="k">触发时间</span><span class="v">{{.Time}}</span></div>
-    <div class="row"><span class="k">客户端IP</span><span class="v">{{.ClientIP}}</span></div>
-  </div>
-  <div class="tip" style="text-align:center">请求编号：{{.RequestID}}</div>
-</div>
-<script>
-(function(){
-var P=(window.__WAF_PREVIEW__===1)||(/[?&]preview=1/.test(window.location.search));
-var C=window.__c||'';
-var LIVE=(!P)&&!!C&&(C.indexOf('{')<0);
-var K='waf#2026$collect';
-function ep(n){return '/waf-cha'+'llenge/'+n;}
-function post(n,kv,ok,fail){
-  var q=[];
-  for(var k in kv){q.push(encodeURIComponent(k)+'='+encodeURIComponent(kv[k]));}
-  var x=new XMLHttpRequest();
-  x.open('POST',ep(n),true);
-  x.setRequestHeader('Content-Type','application/x-www-form-urlencoded;charset=UTF-8');
-  x.onreadystatechange=function(){
-    if(x.readyState!==4)return;
-    var j=null;try{j=JSON.parse(x.responseText);}catch(e){}
-    if(x.status>=200&&x.status<400&&j){if(ok)ok(j);}else{if(fail)fail();}
-  };
-  x.send(q.join('&'));
-}
-function b64x(s){
-  var u=unescape(encodeURIComponent(s)),o='';
-  for(var i=0;i<u.length;i++){o+=String.fromCharCode(u.charCodeAt(i)^K.charCodeAt(i%K.length));}
-  return btoa(o);
-}
-function chash(){
-  try{
-    var cv=document.createElement('canvas');cv.width=220;cv.height=40;
-    var g=cv.getContext('2d');
-    g.textBaseline='top';g.font='15px Arial';g.fillStyle='#f60';g.fillRect(0,0,110,20);
-    g.fillStyle='#069';g.fillText('WAF~#\\u4e2d\\u6587@258',2,2);
-    g.fillStyle='rgba(102,204,0,0.7)';g.fillText('WAF~#\\u4e2d\\u6587@258',4,17);
-    var d=cv.toDataURL(),h=0;
-    for(var i=0;i<d.length;i++){h=(h*31+d.charCodeAt(i))|0;}
-    return (h>>>0).toString(16);
-  }catch(e){return '';}
-}
-function wgl(){
-  try{
-    var cv=document.createElement('canvas');
-    var gl=cv.getContext('webgl')||cv.getContext('experimental-webgl');
-    if(!gl)return ['',''];
-    var di=gl.getExtension('WEBGL_debug_renderer_info');
-    return di?[gl.getParameter(di.UNMASKED_VENDOR_WEBGL),gl.getParameter(di.UNMASKED_RENDERER_WEBGL)]:[gl.getParameter(gl.VENDOR),gl.getParameter(gl.RENDERER)];
-  }catch(e){return ['',''];}
-}
-function collect(){
-  var w=wgl(),n=navigator;
-  return{ua:n.userAgent,lg:n.language,ls:(n.languages||[]).join(','),pl:n.platform,
-    hc:n.hardwareConcurrency||0,dm:n.deviceMemory||0,wd:n.webdriver===true?1:0,
-    sw:screen.width,sh:screen.height,cd:screen.colorDepth,dpr:window.devicePixelRatio||1,
-    tz:(window.Intl&&Intl.DateTimeFormat().resolvedOptions().timeZone)||'',tp:n.maxTouchPoints||0,
-    ce:n.cookieEnabled?1:0,pn:(n.plugins||[]).length,ch:window.chrome?1:0,
-    hd:/HeadlessChrome/i.test(n.userAgent)?1:0,ph:(window.callPhantom||window._phantom)?1:0,
-    sl:(window.__nightmare||window.domAutomation||window.domAutomationController)?1:0,
-    np:(window.Notification&&Notification.permission)||'',gv:w[0],gr:w[1],cv:chash(),ts:Date.now()};
-}
-function report(){
-  if(!LIVE)return;
-  var q=['cid='+encodeURIComponent(C),'d='+encodeURIComponent(b64x(JSON.stringify(collect())))];
-  try{
-    var x=new XMLHttpRequest();
-    x.open('POST','/waf-co'+'llect',true);
-    x.setRequestHeader('Content-Type','application/x-www-form-urlencoded;charset=UTF-8');
-    x.send(q.join('&'));
-  }catch(e){}
-}
-function guard(){
-  if(P)return;
-  window.addEventListener('keydown',function(e){
-    var k=e.key;
-    if(k==='F12'||k===123||(e.ctrlKey&&e.shiftKey&&(k==='I'||k==='J'||k==='C'))){e.preventDefault();e.stopPropagation();return false;}
-  },true);
-  window.addEventListener('contextmenu',function(e){e.preventDefault();return false;});
-  var win=window;
-  if(window.top!==window&&window.parent&&window.parent.outerWidth)win=window.parent;
-  var hits=0,dead=false;
-  function kill(){
-    if(dead)return;dead=true;
-    try{document.body.innerHTML='';}catch(e){}
-    (function st(){requestAnimationFrame(function(){debugger;requestAnimationFrame(st);});})();
-  }
-  setInterval(function(){
-    var ow=win.outerWidth,iw=win.innerWidth,oh=win.outerHeight,ih=win.innerHeight;
-    if(ow-iw>50||oh-ih>135){hits++;if(hits>=2)kill();}else{hits=0;}
-  },500);
-}
-function demo(){
-  var m={'{{.SiteName}}':'官网主站','{{.RequestID}}':'Req-20260818-001234','{{.Reason}}':'SQL注入特征匹配','{{.ClientIP}}':'203.0.113.45','{{.Time}}':'2026-08-18 14:30:00','{{.Position}}':'12','{{.FrontCount}}':'8'};
-  try{
-    var w=document.createTreeWalker(document.body,4,null,false);
-    while(w.nextNode()){
-      var t=w.currentNode,v=t.nodeValue;
-      if(v&&v.indexOf('{'+'{')>-1)t.nodeValue=v.replace(/\\{\\{\\.\\w+\\}\\}/g,function(x){return m[x]||x;});
-    }
-  }catch(e){}
-}
-guard();demo();try{report();}catch(e){}
-START(LIVE,C,P,post);
-});
-function START(LIVE,C,P,post){}
-</script>
-</body>
-</html>`,
   browser_guide: `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1082,6 +1082,5 @@ p{font-size:14px;color:#666666;margin:0 0 10px;line-height:1.8;}
 })();
 </script>
 </body>
-</html>
-`,
+</html>`,
 };
