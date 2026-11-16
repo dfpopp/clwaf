@@ -55,11 +55,38 @@
 
     @media (max-width: 768px) { .detail-list { grid-template-columns: 1fr; } }
   .cell-url { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; color: var(--text-muted); font-family: "SF Mono", Consolas, monospace; }
+
+  /* 误伤反馈条（2026-11-10）：只在有标记时出现，不占位不打扰 */
+  .fp-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; padding: 10px 14px;
+    background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--warning); border-radius: 8px; }
+  .fp-bar .fp-title { font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px; }
+  .fp-bar .fp-num { font-size: 20px; font-weight: 700; color: var(--warning); line-height: 1; }
+  .fp-bar .fp-sub { font-size: 12px; color: var(--text-muted); }
+  .fp-bar .fp-tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--bg-input); color: var(--text-secondary); border: 1px solid var(--border); }
+  .fp-bar .fp-spacer { flex: 1 1 auto; }
+  .fp-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .fp-panel h4 { margin: 0 0 8px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+  .fp-panel .row { display: flex; justify-content: space-between; font-size: 12px; padding: 5px 0; border-bottom: 1px dashed var(--border); }
+  .fp-panel .row:last-child { border-bottom: none; }
+  .fp-panel .row .k { color: var(--text-secondary); }
+  .fp-panel .row .v { color: var(--text-primary); font-family: "SF Mono", Consolas, monospace; }
+  .fp-hint { margin-top: 4px; font-size: 12px; color: var(--warning); }
+  @media (max-width: 768px) { .fp-panel { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 <div id="app" v-cloak>
   <div class="page-container">
+    <!-- 误伤反馈条：只在实际有标记时出现（没有标记说明还没人复核，谈不上误伤率） -->
+    <div class="fp-bar" v-if="fpStats && fpStats.fp_count > 0">
+      <span class="fp-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warning);"></i> 本窗口误伤</span>
+      <span class="fp-num">{{ fpStats.fp_count }}</span>
+      <span class="fp-sub">/ {{ fpStats.total }} 次验证（{{ pct(fpStats.fp_rate) }}）</span>
+      <span class="fp-tag" v-for="e in fpStats.by_engine" :key="'e'+e.name">{{ e.name }} {{ e.count }}</span>
+      <span class="fp-spacer"></span>
+      <el-button size="small" @click="openFpStats"><i class="fa-solid fa-chart-simple"></i> 误伤报表</el-button>
+    </div>
+
     <!-- 筛选栏 -->
     <div class="filter-bar">
       <div class="filter-left">
@@ -81,6 +108,11 @@
           <el-option label="全部接口" :value="''"></el-option>
           <el-option label="API接口" value="1"></el-option>
           <el-option label="Web页面" value="0"></el-option>
+        </el-select>
+        <el-select v-model="f.is_false_positive" style="width:150px;flex:0 0 auto;" placeholder="误伤筛选" clearable @change="onFilterChange">
+          <el-option label="全部记录" :value="''"></el-option>
+          <el-option label="仅看已标误伤" value="1"></el-option>
+          <el-option label="仅看未标记" value="0"></el-option>
         </el-select>
         <el-input v-model="f.ip" placeholder="搜索完整 IP" style="width:180px;" @keyup.enter="load()"></el-input>
         <el-input v-model="f.req_id" placeholder="搜索 请求ID" style="width:220px;" @keyup.enter="load()"></el-input>
@@ -126,8 +158,28 @@
             <el-table-column label="持续时间" width="95">
               <template #default="{ row }">{{ duration(row) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="95" fixed="right">
-              <template #default="{ row }"><el-button size="small" @click="openDetail(row)"><i class="fa-solid fa-circle-info"></i> 详情</el-button></template>
+            <el-table-column label="误伤" width="90">
+              <template #default="{ row }">
+                <el-tooltip v-if="row.is_false_positive === 1" :content="row.fp_remark || '已标记为误伤'" placement="top">
+                  <span class="tag tag-danger">误伤</span>
+                </el-tooltip>
+                <span v-else style="color:var(--text-muted);">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="200" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" @click="openDetail(row)"><i class="fa-solid fa-circle-info"></i> 详情</el-button>
+                <el-dropdown size="small" trigger="click" style="margin-left:6px;" @command="cmd => onRowCmd(cmd, row)">
+                  <el-button size="small">更多 <i class="fa-solid fa-angle-down"></i></el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="fp" v-if="row.is_false_positive !== 1"><i class="fa-solid fa-flag"></i> 标记为误伤</el-dropdown-item>
+                      <el-dropdown-item command="unfp" v-else><i class="fa-solid fa-rotate-left"></i> 取消误伤标记</el-dropdown-item>
+                      <el-dropdown-item command="wl" divided :disabled="!row.client_ip">按 IP 加白名单</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
             </el-table-column>
           </el-table>
         </div>
@@ -156,7 +208,7 @@ const { createApp } = Vue;
 const app = createApp({
   data() {
     return {
-      f: { site_id: '', status: '', challenge_type: '', is_api: '', ip: '', req_id: '' },
+      f: { site_id: '', status: '', challenge_type: '', is_api: '', ip: '', req_id: '', is_false_positive: '' },
       challengeOptions: [
         { value: 'silent_challenge', label: 'JS静默验证' },
         { value: 'slider', label: '滑块验证' },
@@ -165,6 +217,7 @@ const app = createApp({
       ],
       sites: [],
       list: [], pageSize: 15,
+      fpStats: null,
       range: [],
       hasPrev: false, hasNext: false,
       first: { ct: '', id: 0 }, last: { ct: '', id: 0 }
@@ -209,6 +262,7 @@ const app = createApp({
       if (this.f.is_api !== '' && this.f.is_api !== null && this.f.is_api !== undefined) p.is_api = this.f.is_api;
       if (this.f.ip) p.client_ip = String(this.f.ip).trim();
       if (this.f.req_id) p.req_id = String(this.f.req_id).trim();
+      if (this.f.is_false_positive === '0' || this.f.is_false_positive === '1') p.is_false_positive = this.f.is_false_positive;
       App.api.challenge.records(p).then((res) => {
         this.list = res.list || [];
         this.hasPrev = !!res.has_prev;
@@ -216,6 +270,89 @@ const app = createApp({
         this.first = { ct: res.first_ct || '', id: res.first_id || 0 };
         this.last = { ct: res.last_ct || '', id: res.last_id || 0 };
       }).catch(() => {});
+      // 报表只在"重新查询/改筛选"时刷新；翻页（dir 有值）不重复拉聚合查询
+      if (!dir) this.loadFpStats();
+    },
+    /* ---------- 误伤反馈闭环（2026-11-10） ---------- */
+    pct(v) { return (Number(v) || 0).toFixed(1) + '%'; },
+    fpRangeParams() {
+      const p = {};
+      if (this.range && this.range.length === 2) { p.start_time = this.range[0]; p.end_time = this.range[1]; }
+      if (this.f.site_id) p.site_id = this.f.site_id;
+      return p;
+    },
+    loadFpStats() {
+      // 报表与列表共用同一时间窗/站点，保证"上面显示的数字"和"下面的列表"是同一批数据
+      App.api.challenge.fpStats(this.fpRangeParams()).then((res) => {
+        this.fpStats = res || null;
+      }).catch(() => { this.fpStats = null; });
+    },
+    onRowCmd(cmd, row) {
+      if (cmd === 'fp') return this.markFP(row, true);
+      if (cmd === 'unfp') return this.markFP(row, false);
+      if (cmd === 'wl') return this.whitelistIP(row);
+    },
+    markFP(row, fp) {
+      const title = fp ? '标记为误伤' : '取消误伤标记';
+      const tip = fp
+        ? '请说明判断依据（例如：iPhone Safari 真机反复失败、锚点特征不符）。用于后续按引擎族/失败原因聚合统计。'
+        : '取消标记后可重新标记，备注会保留。';
+      ElementPlus.ElMessageBox.prompt(tip, title, {
+        confirmButtonText: '确定', cancelButtonText: '取消',
+        inputPlaceholder: fp ? '选填，最多 200 字' : '选填',
+        inputValue: fp ? '' : (row.fp_remark || ''),
+        inputValidator: (v) => !v || String(v).length <= 200 || '备注最多 200 字'
+      }).then(({ value }) => {
+        App.api.challenge.markFalsePositive({
+          ids: String(row.id),
+          is_false_positive: fp ? 1 : 0,
+          remark: value || ''
+        }).then(() => {
+          ElementPlus.ElMessage.success(fp ? '已标记为误伤' : '已取消误伤标记');
+          this.load();
+        }).catch((e) => ElementPlus.ElMessage.error((e && e.msg) || '操作失败'));
+      }).catch(() => {});
+    },
+    whitelistIP(row) {
+      // 按 IP 是整 IP 长期豁免，先讲清后果再让用户确认（不默认替用户决定）
+      ElementPlus.ElMessageBox.confirm(
+        '将把 IP <b>' + (row.client_ip || '') + '</b> 加入本站白名单，<b>永久跳过人机验证</b>（不跳过规则与 CC）。'
+        + '<br/><br/>该 IP 若是公司出口/代理池，等于整段网络一起放行。确认前请先看清下方复核数据。',
+        '按 IP 加白名单', { dangerouslyUseHTMLString: true, confirmButtonText: '确认添加', cancelButtonText: '取消', type: 'warning' }
+      ).then(() => {
+        App.api.challenge.whitelistIP(row.id).then((res) => {
+          const parts = [];
+          parts.push(res.created ? '已加入白名单' : '该 IP 已在白名单中');
+          if (res.total_24h !== undefined) {
+            parts.push('近 24h：' + res.total_24h + ' 次验证 / ' + res.fail_24h + ' 次失败');
+          }
+          if (res.crawler_ip_unblocked) parts.push('已同步解封爬虫库');
+          ElementPlus.ElMessage.success(parts.join('；'));
+          if (res.warning) {
+            ElementPlus.ElMessageBox.alert(res.warning, '风险提示', { type: 'warning' }).catch(() => {});
+          }
+          this.load();
+        }).catch((e) => ElementPlus.ElMessage.error((e && e.msg) || '加白名单失败'));
+      }).catch(() => {});
+    },
+    openFpStats() {
+      const s = this.fpStats;
+      if (!s) return;
+      const block = (title, arr) => {
+        if (!arr || !arr.length) return '<div><h4>' + title + '</h4><div style="font-size:12px;color:var(--text-muted);">无数据</div></div>';
+        return '<div><h4>' + title + '</h4>' + arr.map((x) =>
+          '<div class="row"><span class="k">' + x.name + '</span><span class="v">' + x.count + '（' + (Number(x.pct) || 0).toFixed(1) + '%）</span></div>'
+        ).join('') + '</div>';
+      };
+      const html = '<div class="fp-panel">'
+        + block('按引擎族', s.by_engine)
+        + block('按失败原因', s.by_reason)
+        + block('按验证类型', s.by_type)
+        + block('按流量闸门裁决', s.by_traffic)
+        + '</div>'
+        + (s.hint ? '<div class="fp-hint"><i class="fa-solid fa-circle-info"></i> ' + s.hint + '</div>' : '');
+      ElementPlus.ElMessageBox.alert(html, '误伤报表 ' + (s.start_time || '') + ' ~ ' + (s.end_time || ''),
+        { dangerouslyUseHTMLString: true, confirmButtonText: '关闭', customClass: 'fp-msgbox' }).catch(() => {});
     },
     pad2(n) { return String(n).padStart(2, '0'); },
     fmtTS(d) {

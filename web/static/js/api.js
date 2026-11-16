@@ -39,6 +39,27 @@
     return v ? 1 : 0;
   }
 
+  /* ===== CSRF 双提交 =====
+     后端登录时下发非 HttpOnly 的 waf_csrf Cookie，Auth 中间件要求
+     X-CSRF-Token 请求头与它等值。跨站页面读不到本站 Cookie，因此伪造不出该头。
+     所有写入类请求（POST）都必须经过 csrfHeaders()，新增直连 fetch 时别漏。 */
+  const CSRF_COOKIE = 'waf_csrf';
+  const CSRF_HEADER = 'X-CSRF-Token';
+
+  function csrfToken() {
+    const m = document.cookie.match(new RegExp('(?:^|;\\s*)' + CSRF_COOKIE + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  /* 在已有 headers 基础上附加 CSRF 头；没有令牌时不附加，
+     由后端返回 403（刷新页面即重新登录拿到令牌）。 */
+  function csrfHeaders(extra) {
+    const headers = extra || {};
+    const token = csrfToken();
+    if (token) headers[CSRF_HEADER] = token;
+    return headers;
+  }
+
   /**
    * 统一请求（返回 json 全量，供内部使用）。
    * @param {string} url 如 "/api/site/list"
@@ -54,7 +75,7 @@
     return fetch(url, {
       method: method,
       credentials: 'same-origin',
-      headers: body ? { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' } : {},
+      headers: csrfHeaders(body ? { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' } : {}),
       body: body
     })
       .then(function (res) {
@@ -146,7 +167,7 @@
         // 上传站点Logo图片（multipart/form-data），返回 { url: '/upload/logo/xxx.png' }
         const fd = new FormData();
         fd.append('file', file);
-        return fetch('/api/site/upload_logo', { method: 'POST', credentials: 'same-origin', body: fd })
+        return fetch('/api/site/upload_logo', { method: 'POST', credentials: 'same-origin', headers: csrfHeaders(), body: fd })
           .then(function (res) { return res.json(); })
           .then(function (json) {
             if (json && json.code === 200) return json.data;
@@ -161,7 +182,7 @@
         fd.append('site_id', siteId);
         fd.append('kind', kind);
         fd.append('file', file);
-        return fetch('/api/site/upload_cert', { method: 'POST', credentials: 'same-origin', body: fd })
+        return fetch('/api/site/upload_cert', { method: 'POST', credentials: 'same-origin', headers: csrfHeaders(), body: fd })
           .then(function (res) { return res.json(); })
           .then(function (json) {
             if (json && json.code === 200) return json.data;
@@ -296,6 +317,16 @@
     challenge: {
       records: function (params) {
         return request('/api/challenge/records', params || {});
+      },
+      // 误伤反馈闭环（2026-11-10）
+      markFalsePositive: function (data) {
+        return request('/api/challenge/false-positive', data || {});
+      },
+      whitelistIP: function (id) {
+        return request('/api/challenge/whitelist-ip', { id: id });
+      },
+      fpStats: function (params) {
+        return request('/api/challenge/fp-stats', params || {});
       }
     },
     analysis: {
@@ -306,7 +337,7 @@
         // 上传原始日志文件（multipart/form-data）
         const fd = new FormData();
         fd.append('file', file);
-        return fetch('/api/analysis/upload', { method: 'POST', credentials: 'same-origin', body: fd })
+        return fetch('/api/analysis/upload', { method: 'POST', credentials: 'same-origin', headers: csrfHeaders(), body: fd })
           .then(function (res) { return res.json(); })
           .then(function (json) {
             if (json && json.code === 200) return json.data;
@@ -350,7 +381,7 @@
         return fetch('/api/attack_log/export', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+          headers: csrfHeaders({ 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }),
           body: buildBody(params)
         }).then(function (res) {
           const ct = res.headers.get('content-type') || '';

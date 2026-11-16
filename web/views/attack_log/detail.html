@@ -43,6 +43,8 @@
     .detail-list dd { font-size: 13px; color: var(--text-primary); word-break: break-all; }
     .uri-break { word-break: break-all; }
     .detail-section { font-size: 12px; color: var(--text-secondary); margin: 4px 0 8px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .section-hint { font-weight: 400; color: var(--text-muted); font-size: 11px; }
+    .hit-note { color: var(--text-muted); font-size: 11px; margin-left: 6px; }
     .json-block { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; line-height: 1.5; margin-bottom: 16px; }
 
     /* 请求参数快照（误报反馈） */
@@ -85,12 +87,13 @@
       <div><dt>接口类型</dt><dd><span class="tag" :class="row.is_api === 1 ? 'tag-info' : 'tag-neutral'">{{ row.is_api === 1 ? 'API接口' : 'Web页面' }}</span></dd></div>
       <div><dt>请求方法</dt><dd><span class="tag tag-success">{{ row.method || '-' }}</span></dd></div>
       <div><dt>处置动作</dt><dd><span class="tag" :class="actionTag(row.action)">{{ actionLabel(row.action) }}</span></dd></div>
+      <div><dt>拦截次数</dt><dd><span class="tag" :class="row.hit_count > 1 ? 'tag-act-block' : 'tag-neutral'">×{{ row.hit_count || 1 }}</span><span v-if="row.hit_count > 1" class="hit-note">60 秒窗口内合并</span></dd></div>
       <div><dt>请求ID</dt><dd class="mono">{{ row.req_id || '-' }}</dd></div>
       <div class="full"><dt>请求URI</dt><dd class="mono uri-break">{{ row.uri || '-' }}</dd></div>
       <div class="full"><dt>User-Agent</dt><dd>{{ row.ua || '-' }}</dd></div>
       <div class="full"><dt>Referer</dt><dd>{{ row.referer || '-' }}</dd></div>
     </dl>
-    <div v-if="row.headers" class="detail-section"><el-icon :size="13"><component :is="'Tickets'"/></el-icon> 请求头</div>
+    <div v-if="row.headers" class="detail-section"><el-icon :size="13"><component :is="'Tickets'"/></el-icon> 请求头<span class="section-hint">仅展示与攻击分析相关的头，凭据已掩码</span></div>
     <pre v-if="row.headers" class="json-block">{{ row.headers }}</pre>
     <!-- 请求参数快照：内置攻击拦截才有（detail 列，值已脱敏截断） -->
     <template v-if="snap">
@@ -189,7 +192,9 @@ const app = createApp({
       }
       if (history.length > 1) history.back();
     },
-    /* 解析参数快照（引擎侧 kind=req_params 才渲染；老数据/挑战类无此字段） */
+    /* 解析 detail 列：只承载一类内容——kind=req_params 的请求参数快照，
+       用于渲染误报模板。合并次数已改由 hit_count 独立列承载（见引擎 attackLog.LogEntry.HitCount，
+       详情页元信息区直接展示），此处不再解析。 */
     parseSnap(raw) {
       if (!raw) return;
       try {

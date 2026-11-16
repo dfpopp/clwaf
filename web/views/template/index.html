@@ -177,8 +177,13 @@ html[data-theme="dark"] .code-area-wrap .cm-property { color: #92b4f0; }
               </el-select>
               <span v-else class="tpl-type-badge" :class="curMeta.badge">{{ current }}</span>
             </div>
+            <!-- 预览沙箱：只给 allow-scripts，**不给 allow-same-origin**。
+                 两者同时给等于没有沙箱：脚本可自行移除 sandbox 属性逃逸，
+                 进而读写后台域 Cookie/localStorage，实现模板 → 后台的越权。
+                 去掉 same-origin 后 iframe 变为 opaque origin，脚本仍能渲染模板交互
+                 （滑块/DOM 生成正常），但模板里的 document.cookie 读写会静默失效。 -->
             <div class="tpl-preview-wrap" @click="openEditor" :title="'点击编辑'">
-              <iframe :srcdoc="previewHtml" sandbox="allow-same-origin allow-scripts"></iframe>
+              <iframe :srcdoc="previewHtml" sandbox="allow-scripts"></iframe>
               <div class="tpl-preview-mask"><span class="zoom-tip"><el-icon :size="12"><component :is="'EditPen'"/></el-icon> 点击编辑</span></div>
             </div>
             <div class="tpl-card-foot">
@@ -238,7 +243,8 @@ html[data-theme="dark"] .code-area-wrap .cm-property { color: #92b4f0; }
         <span class="pt-label" style="margin-left:auto;">变量已替换为示例值</span>
       </div>
       <div class="preview-stage">
-        <iframe :class="device" :srcdoc="editorPreview" sandbox="allow-same-origin allow-scripts"></iframe>
+        <!-- 同预览沙箱：不给 allow-same-origin，避免模板脚本访问后台域凭据 -->
+        <iframe :class="device" :srcdoc="editorPreview" sandbox="allow-scripts"></iframe>
       </div>
     </div>
   </div>

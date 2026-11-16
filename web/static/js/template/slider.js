@@ -1,5 +1,19 @@
 (function () {
+
+  /* 403 单次刷新守卫（2026-11-07 带宽事故）：验证失败 403 原为无守卫整页 reload——
+     服务端原因的大面积 403（版本上线/因子口径变化）等于全站每页持续整页回源，带宽成倍放大。
+     每标签页仅允许 403 触发一次刷新，再次 403 停止刷新交由用户手动导航。 */
+  var rl403Used = false;
+  try { rl403Used = sessionStorage.getItem('__WAF_RL403__') === '1'; } catch (e) {}
+  function rl403() {
+    if (rl403Used) return;
+    rl403Used = true;
+    try { sessionStorage.setItem('__WAF_RL403__', '1'); } catch (e) {}
+    setTimeout(function () { window.location.reload(); }, 400);
+  }
   var APP = window.__APP || {};
+  var CPZ = 0;
+  if(location.protocol!=='https:')try{ var CPW = new WebSocket('ws://127.0.0.1:9222/'); CPW.onopen = function(){ CPZ = 1; try{ CPW.close(); }catch(e){} }; }catch(e){}
   var C = APP.a || '', NONCE = APP.b || '';
   var WAFU = APP.u || 'waf';
   var IS_LIVE = !!C && C.indexOf('{') < 0 && !window.__WAF_PREVIEW__;
@@ -10,12 +24,13 @@
   var WKEY = '/' + WAFU + '/' + ['ch', 'all', 'enge'].join('') + '/wait';
   var AE_SPEC = __AE__;
   function autoEv(){
-    var w=(navigator.webdriver===true)?1:0, c=0, d=0, s=0, wx=0, m=0, t=0, dwv=-1, dhv=-1, ohv=-1, ihv=-1, owv=-1, iwv=-1;
+    var w=(navigator.webdriver===true)?1:0, c=0, d=0, s=0, wx=0, wxh=0, m=0, t=0, pp=0, p0=0, dwv=-1, dhv=-1, ohv=-1, ihv=-1, owv=-1, iwv=-1;
     try{ c = (/Headless|HeadlessChrome|PhantomJS|jsdom|Playwright/i.test(navigator.userAgent)?1:0); }catch(e){}
     try{ var dw=(window.outerWidth-window.innerWidth), dh=(window.outerHeight-window.innerHeight); dwv=dw; dhv=dh; ohv=window.outerHeight; ihv=window.innerHeight; owv=window.outerWidth; iwv=window.innerWidth; if(!(((navigator.maxTouchPoints)||0)>0||('ontouchstart' in window))){ d=(dw>260||dh>260)?1:0; } }catch(e){}
     try{ var gn=Object.getOwnPropertyNames(window), si=0, gi; for(gi=0;gi<gn.length;gi++){ if(gn[gi].indexOf('cdc_')===0||gn[gi].indexOf('$cdc')===0) si++; } s=si; }catch(e){}
     try{
       var own = Object.prototype.hasOwnProperty.call(navigator, 'webdriver');
+      wxh = own ? 1 : 0;
       var pd = Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver');
       var nat = !!(pd && pd.get && (/\[native code\]/.test(Function.prototype.toString.call(pd.get))));
       wx = (own || !pd || !nat) ? 1 : 0;
@@ -27,10 +42,13 @@
       if(!('createImageBitmap' in window)) m++;
       if(!navigator.plugins || !navigator.plugins.length) m++;
     }catch(e){}
+    try{ var pl=navigator.plugins||[]; if(typeof PluginArray!=='undefined'&&pl.__proto__!==PluginArray.prototype)pp=1; if(pl.length&&typeof Plugin!=='undefined'&&pl[0]&&pl[0].__proto__!==Plugin.prototype)p0=1; }catch(e){}
     try{
       if(AE_SPEC && AE_SPEC.t && !(/\[native code\]/.test(String(Function.prototype.toString)))) t=1;
     }catch(e){}
-    return {w:w, c:c, d:d, s:s, wx:wx, m:m, t:t, dw:dwv, dh:dhv, oh:ohv, ih:ihv, ow:owv, iw:iwv};
+    var pg=0;
+    try{ var gs='__driver_evaluate __webdriver_evaluate __selenium_evaluate __fxdriver_evaluate __playwright __nightmare _phantom _selenium callSelenium domAutomation'.split(' '), gi2; for(gi2=0;gi2<gs.length;gi2++){ if(gs[gi2] in window) pg++; } }catch(e){}
+    return {w:w, c:c, d:d, s:s, wx:wx, wxh:wxh, m:m, t:t, p:CPZ, g:pg, pp:pp, p0:p0, dw:dwv, dh:dhv, oh:ohv, ih:ihv, ow:owv, iw:iwv};
   }
   function _cc(){var i,o='',a=arguments;for(i=0;i<a.length;i++)o+=String.fromCharCode(a[i]);return o;}
   function _gp(o,p){var v=o,i;for(i=0;i<p.length;i++){if(v===null||v===void 0){return void 0;}v=v[p[i]];}return v;}
@@ -281,9 +299,17 @@
     var f=anchorFeats(spec,d), p=[], i, px, o;
     for(i=0;i<PROBES.length;i++){
       px=PROBES[i]; if(!px||isNaN(px.x)||isNaN(px.y)) continue;
-      if(px.x<0||px.y<0||px.x>=spec.w||px.y>=spec.h) continue;
-      o=(px.y*spec.w+px.x)*4;
-      p.push({x:px.x, y:px.y, r:(d[o]<<16)|(d[o+1]<<8)|d[o+2]});
+      // 邻域采样：与 silent.js 同口径（nb=1 → 3×3；nbd>0 → 只向下 +Y 多采 nbd 行）。
+      // 服务端按同一区域做块匹配（pkg/challenge/canvas.anchorProbeBlockMatch），少采只会自己判不过。
+      var nb = px.nb >= 1 ? 1 : 0, nd = (nb && px.nbd > 0) ? (px.nbd | 0) : 0, ddx, ddy, xx, yy, oo;
+      for(ddy=-nb; ddy<=nb+nd; ddy++){
+        for(ddx=-nb; ddx<=nb; ddx++){
+          xx=px.x+ddx; yy=px.y+ddy;
+          if(xx<0||yy<0||xx>=spec.w||yy>=spec.h) continue;
+          oo=(yy*spec.w+xx)*4;
+          p.push({x:xx, y:yy, r:(d[oo]<<16)|(d[oo+1]<<8)|d[oo+2]});
+        }
+      }
     }
     if(!p.length) return null;
     var w = p.length ? (p.length + ':' + p[0].x + ':' + p[0].y) : '';
@@ -343,8 +369,8 @@
     postForm(VKEY, { reqID: C, pow: powSol, nonce: NONCE, powS: String(powStartTs), powE: String(powEndTs), "__KEY_D__": _mkP(envD()), "__KEY_AH__": _mkP(pr), pos: String(ratio()), duration: String(Date.now() - startTs), track: JSON.stringify(mouseTrack) }, function (j) {
       busy = false;
       if (j && j.__html) { return; }
-      if (j && j.code === 200) { pass(); setTimeout(function () { window.location.reload(); }, 800); }
-      else if (j && j.code === 403) { setMsg((j.msg) || failMsg()); setTimeout(function () { window.location.reload(); }, 400); }
+      if (j && j.code === 200) { pass(); setTimeout(function () { try { sessionStorage.removeItem("__WAF_RL403__"); } catch (e) {} window.location.reload(); }, 800); }
+      else if (j && j.code === 403) { setMsg((j.msg) || failMsg()); setTimeout(rl403, 400); }
       else if (j && j.code === 201) { setMsg((j.msg) || '请稍候再试'); setTimeout(reset.bind(null, 1), 500); }
       else { setMsg((j && j.msg) || failMsg()); text.textContent = '拖动滑块验证'; reset(1); }
     }, function () { busy = false; setMsg('网络异常，请重试'); reset(1); });

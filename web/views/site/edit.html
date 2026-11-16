@@ -87,6 +87,14 @@
     .pt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
     .pt-grid .pt-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
     @media (max-width: 768px) { .pt-grid { grid-template-columns: 1fr; } }
+    /* 安全响应头预览（2026-11-10）：让"会下发什么"可见，不用用户自己理解 CSP */
+    .sh-preview { background: var(--bg-body); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+    .sh-preview .sh-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+    .sh-preview .sh-line { display: flex; gap: 8px; font-size: 12px; line-height: 20px; word-break: break-all; }
+    .sh-preview .sh-line code { color: var(--accent); flex-shrink: 0; font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .sh-preview .sh-line span { color: var(--text-primary); }
+    .sh-preview .sh-empty { font-size: 12px; color: var(--text-muted); }
+    .sh-warn { font-size: 12px; color: var(--danger); margin-top: 4px; }
     /* 表单底部 */
     .form-footer { display: flex; justify-content: flex-end; gap: 12px; padding-top: 16px; margin-top: 8px; border-top: 1px solid var(--border); }
     /* 校验错误提示 */
@@ -162,13 +170,13 @@
           <!-- API 接口路径 -->
           <el-form-item label="API 接口路径" class="full">
             <div style="width:100%;">
-              <div class="info-box"><i class="fa-solid fa-circle-info"></i>配置后，这些路径下的请求<strong>强制走 API 挑战协议</strong>（428 + 202 + 轮询），不再依赖 Accept 头自动判断。适用于 App 接口、小程序接口等场景，避免误判为浏览器请求返回 HTML。</div>
+              <div class="info-box"><i class="fa-solid fa-circle-info"></i>配置后，这些路径<strong>一律按接口处理，不返回 HTML 页面</strong>，且<strong>不管是不是页面内请求</strong>：主凭证有效直接放行；主凭证过期但页面会话票（P 票）仍有效也放行，网页与 App 共用同一路径时页面功能不受影响；两者都没有则返回 428（HTTP 码与 body code 都是 428，带 reqID 与 page_url → WebView 打开 → 轮询 status 至 completed）。持主凭证但触发防护时，进入等候室 / 被拦截 / 过载 / 源站不可用返回对应状态码（429 / 403 / 503 / 502）+ JSON + page_url。带静态资源后缀的文件（如 /api/user/avatar.png）会先按资源类型分流，不走接口协议，回到正常页面凭证链。适用于 App 接口、小程序接口等场景。完整接入说明见「凭证配置 → API 接入说明」。</div>
               <div v-for="(p, idx) in form.api_paths" :key="idx" class="api-path-row">
                 <el-input v-model="p.value" class="api-path-input" placeholder="/api/* 或 /v1/*"></el-input>
                 <button type="button" class="del-api-path" @click="removeApiPath(idx)" title="删除"><i class="fa-solid fa-trash"></i></button>
               </div>
               <el-button size="small" class="add-api-path" @click="addApiPath"><i class="fa-solid fa-plus"></i> 添加路径</el-button>
-              <div class="form-hint">格式：/api/* 或 /v1/*，支持通配符；留空则由 WAF 根据 Accept 头自动判断</div>
+              <div class="form-hint">格式：/api/ 或 /v1/，按前缀匹配，不要带 * 通配符。留空时只能靠请求头里的 JSON 特征识别接口，且不会走 428 挑战协议，App / 小程序首次需要验证时拿不到可打开的页面地址，因此 App / 小程序接口务必登记。<strong>静态资源不自动放行</strong>：图片、字体、音视频等按文件后缀与请求类型判定后回到原有凭证链——页面内加载仍查主凭证和 P 票，导航类请求只认主凭证（该挑战挑战、该拦截拦截）。App / 小程序加载线上图片若被拦，请在白名单中放行对应 URL（不给静态后缀开免检通道，避免爬虫狂打静态资源打满带宽）。favicon.ico 浏览器自动发起，始终放行。</div>
             </div>
           </el-form-item>
 
@@ -274,6 +282,53 @@
                 </el-form-item>
               </div>
               <div class="form-hint" style="margin-top:4px;">默认取 RemoteAddr；在外层挂了代理（如 EO / Nginx / SLB）时，需按实际情况选择 X-Forwarded-For 或自定义 Header，否则客户端 IP 会误判为代理节点</div>
+            </div>
+          </el-form-item>
+
+          <!-- 安全响应头（2026-11-10）：默认开启，零配置即可用；源站已设同名头不覆盖 -->
+          <el-form-item label="安全响应头" class="full">
+            <div style="width:100%;">
+              <div class="toggle-row">
+                <el-switch v-model="form.security_headers_enable"></el-switch>
+                <span class="toggle-tip">默认开启。由 WAF 统一补上一套浏览器安全响应头，防点击劫持、MIME 嗅探与 Referer 泄漏；源站自己已设置的响应头不会被覆盖</span>
+              </div>
+              <div class="form-hint" style="margin-top:4px;">
+                开启时：先下发一套安全默认值，再按下方配置逐项覆盖。关闭时：<b>一个都不下发</b>（含 X-Content-Type-Options），等同于把这项防护完全交给源站
+              </div>
+
+              <div v-if="form.security_headers_enable" style="margin-top:12px;">
+                <!-- 将下发什么：把解析结果直接摆出来，避免用户凭猜 -->
+                <div class="sh-preview">
+                  <div class="sh-title">本站点将下发以下响应头（源站已设置的项会自动跳过）</div>
+                  <div v-for="(h, i) in resolvedSecurityHeaders" :key="i" class="sh-line">
+                    <code>{{ h.name }}:</code><span>{{ h.value }}</span>
+                  </div>
+                  <div v-if="!resolvedSecurityHeaders.length" class="sh-empty">当前配置解析后无可下发项</div>
+                </div>
+
+                <!-- 常见场景：只有这一项需要用户做选择 -->
+                <el-checkbox v-model="sh.allowEmbed" style="margin-top:12px;">
+                  我的站点需要被第三方 iframe 嵌入
+                </el-checkbox>
+                <div class="form-hint" style="margin-top:2px;">
+                  勾选后会关闭 X-Frame-Options 与 frame-ancestors 限制。仅当确有门户/合作方用 iframe 嵌入本站时勾选，否则保持默认（不允许被嵌入）
+                </div>
+
+                <!-- 高级：两个必须用户决定的项，默认为空 -->
+                <el-form-item label="HSTS" style="margin-top:12px;margin-bottom:0;">
+                  <el-input v-model="sh.hsts" style="max-width:360px;" placeholder="留空=不下发，常用值：max-age=31536000"></el-input>
+                  <div class="sh-warn">
+                    一经下发浏览器会长期记住，<b>无法撤销</b>。站点还有 http 子域时不要加 includeSubDomains，否则该子域会直接打不开
+                  </div>
+                </el-form-item>
+
+                <el-form-item label="自定义 CSP" style="margin-top:8px;margin-bottom:0;">
+                  <el-input v-model="sh.csp" type="textarea" :rows="2" placeholder="留空=只下发 frame-ancestors 'self'（仅防嵌入）"></el-input>
+                  <div class="sh-warn">
+                    填写后会完全覆盖默认值，写错会导致页面样式丢失或白屏。建议先在测试站点验证；允许指定域名嵌入的写法：frame-ancestors 'self' https://portal.example.com
+                  </div>
+                </el-form-item>
+              </div>
             </div>
           </el-form-item>
 
@@ -434,7 +489,10 @@ const app = createApp({
         logo: { name: '', size: '', dragover: false }
       },
       pendingCert: null,
-      pendingKey: null
+      pendingKey: null,
+      // 安全响应头表单态（2026-11-10）：只暴露三个用户能理解的选项，
+      // 真正存库的是 collectSecurityHeaders() 拼出的 JSON（见 pkg/securityheaders 的键约定）
+      sh: { allowEmbed: false, hsts: '', csp: '' }
     };
   },
   computed: {
@@ -442,6 +500,29 @@ const app = createApp({
     canAddUpstream() {
       const rows = (this.form.upstreams || []).length;
       return this.maxUpstreams === 0 || rows < this.maxUpstreams;
+    },
+    /* 安全响应头预览（2026-11-10）：把"最终会下发什么"直接摆给用户看。
+       解析规则与 pkg/securityheaders.Resolve 一致——先铺基础档默认值，再按自定义逐项覆盖/关闭。
+       改默认值必须同步 pkg/securityheaders.baseDefaults（那里有 Go 单测锁定）。 */
+    resolvedSecurityHeaders() {
+      if (!this.form.security_headers_enable) return [];
+      const o = this.collectSecurityHeaders();
+      const defs = [
+        ['nosniff', 'X-Content-Type-Options', 'nosniff'],
+        ['rp', 'Referrer-Policy', 'strict-origin-when-cross-origin'],
+        ['xfo', 'X-Frame-Options', 'SAMEORIGIN'],
+        ['csp', 'Content-Security-Policy', "frame-ancestors 'self'"]
+      ];
+      const out = [];
+      defs.forEach(([k, name, dv]) => {
+        const v = Object.prototype.hasOwnProperty.call(o, k) ? o[k] : dv;
+        if (!v || String(v).toLowerCase() === 'off') return;
+        out.push({ name: name, value: v });
+      });
+      if (o.hsts && String(o.hsts).toLowerCase() !== 'off') {
+        out.push({ name: 'Strict-Transport-Security', value: o.hsts });
+      }
+      return out;
     }
   },
   mounted() {
@@ -506,8 +587,12 @@ const app = createApp({
         // 转字符串与 el-radio 的 value（字符串）严格相等匹配，回显已选档位
         js_delay: String([0, 1, 3, 5].indexOf(Number(s.js_delay)) >= 0 ? Number(s.js_delay) : 1),
         log_enable: s.log_enable === 1,
-        page_templates: pageTemplates
+        page_templates: pageTemplates,
+        // 安全响应头：老数据/新建站点没有该字段时按"开启"回显——与后端 Save 的默认口径一致，
+        // 否则编辑一次老站点就会把已开的安全头静默关掉
+        security_headers_enable: s.security_headers_enable !== 0
       };
+      this.fillSecurityHeaders(s.security_headers || '');
       if (this.form.cert_path) this.uploads.cert = { name: this.form.cert_path, size: '已配置，重新上传可替换', dragover: false };
       if (this.form.key_path) this.uploads.key = { name: this.form.key_path, size: '已配置，重新上传可替换', dragover: false };
       if (this.form.logo_url) this.uploads.logo = { name: this.form.logo_url.split('/').pop(), size: '已上传，重新上传可替换', dragover: false };
@@ -607,8 +692,49 @@ const app = createApp({
         defense_type: this.form.defense_type,
         challenge_template: this.form.challenge_template,
         js_delay: this.form.js_delay,
-        page_templates: this.collectPageTpls()
+        page_templates: this.collectPageTpls(),
+        security_headers_enable: App.to01(this.form.security_headers_enable),
+        // 自定义配置**无条件提交**：开关只决定"发不发"，配置本身要留住。
+        // 早前写成关闭时提交空串，结果用户关一次再开，HSTS/CSP 全被抹掉。
+        // 后端 Normalize 照常校验，引擎侧 enable=0 时不读该字段，留着无副作用。
+        security_headers: JSON.stringify(this.collectSecurityHeaders())
       };
+    },
+    // fillSecurityHeaders 把已存的自定义 JSON 拆回三个表单字段（2026-11-10）。
+    // 口径与 collectSecurityHeaders 严格互逆：保存→重新打开→再保存，结果必须不变。
+    fillSecurityHeaders(raw) {
+      let o = {};
+      try { o = JSON.parse(raw || '{}') || {}; } catch (e) { o = {}; }
+      const off = v => !v || String(v).toLowerCase() === 'off';
+      // 只按 xfo 反推"是否允许嵌入"：csp 可能被用户填成"允许指定域名嵌入"的自定义值，
+      // 若按 xfo&&csp 双关判断，这种配置重新打开就会丢成"不允许嵌入"，再保存直接改坏线上行为。
+      //
+      // ⚠ 必须判"显式 off"，不能用 off(o.xfo)：空配置（新建站点 / 老数据 raw=''）时
+      // o.xfo 是 undefined，off(undefined)=true 会把「需要被 iframe 嵌入」默认勾上，
+      // 保存后写入 {xfo:off, csp:off} —— 新建站点第一次保存就丢掉了点击劫持防护。
+      this.sh.allowEmbed = String(o.xfo || '').toLowerCase() === 'off';
+      this.sh.hsts = off(o.hsts) ? '' : String(o.hsts);
+      this.sh.csp = off(o.csp) ? '' : String(o.csp);
+    },
+    // collectSecurityHeaders 把三个表单字段拼成存库 JSON（键约定见 pkg/securityheaders）。
+    // 规则：
+    //   - nosniff / rp 恒下发（零误伤，没有关掉的必要，故不暴露给用户）
+    //   - 勾了"需要被 iframe 嵌入" → xfo/csp 置 off；否则 xfo=SAMEORIGIN，
+    //     csp 留空时用默认的 frame-ancestors 'self'，填了则完全按用户的值
+    //   - hsts 只在用户填了才下发（不可撤销，绝不默认给值）
+    collectSecurityHeaders() {
+      const o = { nosniff: 'nosniff', rp: 'strict-origin-when-cross-origin' };
+      const csp = (this.sh.csp || '').trim();
+      if (this.sh.allowEmbed) {
+        o.xfo = 'off';
+        o.csp = csp || 'off';
+      } else {
+        o.xfo = 'SAMEORIGIN';
+        o.csp = csp || "frame-ancestors 'self'";
+      }
+      const hsts = (this.sh.hsts || '').trim();
+      if (hsts) o.hsts = hsts;
+      return o;
     },
     // collectPageTpls 页面模板映射仅提交非零选择（0=使用默认模板不入映射）；免费版提交空串
     collectPageTpls() {

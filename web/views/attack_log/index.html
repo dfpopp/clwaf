@@ -205,12 +205,13 @@
                         <th>请求URI</th>
                         <th>方法</th>
                         <th>处置动作</th>
+                        <th>次数</th>
                         <th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-if="paged.length === 0">
-                        <td colspan="11"><div class="empty-state"><el-icon :size="36"><component :is="'FolderOpened'"/></el-icon><div>暂无匹配的攻击记录</div></div></td>
+                        <td colspan="12"><div class="empty-state"><el-icon :size="36"><component :is="'FolderOpened'"/></el-icon><div>暂无匹配的攻击记录</div></div></td>
                       </tr>
                       <tr v-for="r in paged" :key="r.id">
                         <td style="color:var(--text-muted);">{{ r.create_time }}</td>
@@ -228,6 +229,10 @@
                         <td><span class="mono cell-uri" :title="r.uri">{{ r.uri || '-' }}</span></td>
                         <td><span class="tag tag-success">{{ r.method || '-' }}</span></td>
                         <td><span class="tag" :class="actionTag(r.action)">{{ actionLabel(r.action) }}</span></td>
+                        <td>
+                          <span v-if="r.hit_count > 1" class="tag tag-act-block" :title="'60 秒窗口内相同来源/目标/规则/请求头指纹合并为 1 条，共拦截 ' + r.hit_count + ' 次'">×{{ r.hit_count }}</span>
+                          <span v-else style="color:var(--text-muted);">1</span>
+                        </td>
                         <td>
                           <div class="row-actions">
                             <el-button size="small" @click="openDetail(r)"><el-icon :size="12" style="margin-right:3px;"><component :is="'View'"/></el-icon> 详情</el-button>
