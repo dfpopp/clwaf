@@ -348,6 +348,36 @@
       return '-';
     },
 
+    /* 档位徽标：只读 detail.stage（引擎侧唯一口径），取不到返回空串由调用方不渲染。
+       取值集合：0s_fast（0秒门禁通过）/ 1s / 3s / 5s；交互式挑战（滑块/拼图/验证码/IE）
+       不写 stage——类型已经区分，不补冗余字段。历史记录没有 stage 同样返回空串。
+       为什么需要它：0 秒档与 1/3/5 秒档的 challenge_type 同为 silent_challenge，后台
+       "验证类型"统一显示"JS静默验证"，不看 stage 就无法区分，会误判"0 秒失败也被记了"。 */
+    challengeStage: function (row) {
+      let d = row && row.detail;
+      if (typeof d === 'string') {
+        try { d = JSON.parse(d); } catch (e) { return ''; }
+      }
+      if (!d || typeof d !== 'object') return '';
+      const st = d.stage;
+      if (typeof st !== 'string' || !st) return '';
+      // 0 秒档：门禁通过记录（fast 无会话，走 fastpass 单独构造），徽标文案用"0秒"更好读
+      if (st === '0s_fast') return '0秒';
+      const m = /^(\d+)s$/.exec(st);
+      return m ? m[1] + '秒' : st;
+    },
+
+    /* 档位徽标配色类：按"用户感知成本"分色，便于列表竖着扫时快速分辨。
+       0 秒 = 零打扰门禁（绿色 success），1 秒 = 轻微等待（信息蓝），3/5 秒 = 明显等待（提示黄）。
+       交互式挑战不写 stage，challengeStage 返回空串，此处也不会被调用。 */
+    challengeStageClass: function (row) {
+      const s = U.challengeStage(row);
+      if (!s) return '';
+      if (s === '0秒') return 'tag-success';
+      if (s === '1秒') return 'tag-info';
+      return 'tag-warning';
+    },
+
     /* CSV 导出 */
     downloadCsv: function (filename, headers, rows) {
       const esc = function (c) {
