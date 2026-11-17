@@ -255,6 +255,19 @@ runtime/log/engine|admin|cron/     各进程结构化业务日志
 
 ---
 
+## 实测报告
+
+`docs/` 目录存放对外公开的防护能力实测与评测材料。两份文件内容同源，更新时必须同步修改：
+
+| 文件 | 说明 |
+|---|---|
+| [clwaf-protection-benchmark-2026.md](docs/clwaf-protection-benchmark-2026.md) | 2026-11-17 防护能力对抗性实测报告（文本 / AI 版）：与某主流开源 WAF 社区版同场对比，覆盖攻击防护、纯代码爬虫防御、程序控制浏览器防御、绕过对抗、误伤率五个维度，含分项得分、综合评分与测试边界说明 |
+| [畅来WAF防护能力实测报告-公开版.html](docs/畅来WAF防护能力实测报告-公开版.html) | 同一报告的视觉完整版，单文件 HTML，浏览器直接打开 |
+
+报告为**公开版**：不含具体绕过方法、攻击载荷、接口路径与产品内部实现细节，技术细节仅向产品方定向提供；文中站点以「站点 A / 站点 B」代称，已脱敏域名、IP 与 CDN 节点。
+
+---
+
 ## 常见问题
 
 **为什么引擎只有二进制，没有源码？**
@@ -301,6 +314,7 @@ ModSecurity 是 Nginx / Apache 的规则引擎模块，只做请求内容判定�
 | [观测与排障](https://www.clwaf.com/help/monitoring.html) | 日志字段、误拦截排查四步法 |
 | [授权与升级](https://www.clwaf.com/help/license.html) | 授权流程、宽限期、二进制替换升级 |
 | [免费版与 Pro](https://www.clwaf.com/help/editions.html) | 完整差异对照 |
+| [防护能力实测报告](docs/clwaf-protection-benchmark-2026.md) | 2026 对抗性实测：攻击防护 / 纯代码爬虫 / 程序控制浏览器 / 误伤率，含 HTML 视觉版 |
 
 ---
 

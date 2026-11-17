@@ -337,7 +337,7 @@ CREATE TABLE `waf_credential_config`  (
   `tier_sec_med` int NOT NULL DEFAULT 3 COMMENT '中危档等待时长(秒)',
   `tier_sec_high` int NOT NULL DEFAULT 5 COMMENT '高危档等待时长(秒)',
   `min_stay_ms` int NOT NULL DEFAULT 600 COMMENT '最小停留(毫秒,防瞬时脚本)',
-  `force_wgl` tinyint(1) NOT NULL DEFAULT 1 COMMENT '强制验证WebGL指纹(wgl)：1=为空直接拒绝并提示；0=为空放行给半权(有值仍必复验)',
+  `force_wgl` tinyint(1) NOT NULL DEFAULT 1 COMMENT '【已废弃2026-11-17，引擎不再读写】wgl空值恒软标记，锚点硬门槛兜底；列保留仅为存量兼容',
   `force_acf` tinyint(1) NOT NULL DEFAULT 1 COMMENT '强制验证音频指纹(acf)：1=为空直接拒绝并提示；0=为空放行给半权(有值仍必复验)',
   `create_time` datetime NOT NULL COMMENT '创建时间',
   `update_time` datetime NOT NULL COMMENT '更新时间',
