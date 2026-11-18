@@ -526,6 +526,13 @@ CREATE TABLE `waf_system_config`  (
   `dim_stats_retention_days` int NOT NULL DEFAULT 30 COMMENT '请求维度统计(request_dim_stats)保留天数',
   `dedup_hour_retention_hours` int NOT NULL DEFAULT 48 COMMENT '去重统计小时行保留小时数（24h视图数据源+天级汇总自愈窗口）',
   `dedup_day_retention_days` int NOT NULL DEFAULT 30 COMMENT '去重统计天级行保留天数（7d/30d视图数据源）',
+  `bw_guard_enabled` tinyint NOT NULL DEFAULT 0 COMMENT '带宽保护开关：1=开启 0=关闭（开启后仅把0秒档站点降级为1秒挑战）',
+  `bw_limit_mbps` int NOT NULL DEFAULT 0 COMMENT '购买带宽（Mbps）：0=未配置，不启用',
+  `bw_trigger_pct` int NOT NULL DEFAULT 90 COMMENT '带宽触发阈值（百分比）：达到购买带宽该比例并持续超限即降级0秒档',
+  `bw_release_pct` int NOT NULL DEFAULT 80 COMMENT '带宽恢复阈值（百分比）：低于该比例持续满足才解除降级',
+  `bw_iface` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '' COMMENT '采样网卡名：空=自动识别默认路由网卡',
+  `bw_hold_sec` int NOT NULL DEFAULT 300 COMMENT '降级最短保持时间（秒）',
+  `bw_cooldown_sec` int NOT NULL DEFAULT 600 COMMENT '解除降级后的冷却时间（秒）',
   PRIMARY KEY (`id`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '系统配置表' ROW_FORMAT = DYNAMIC;
 

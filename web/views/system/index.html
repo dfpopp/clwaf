@@ -32,10 +32,18 @@
     .form-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
     .form-row .full { grid-column: 1 / -1; }
     .field-narrow { max-width: 280px; }
+    /* label 后的问号提示：长说明收进 tooltip，避免把卡片撑高 */
+    .lbl-tip { margin-left: 4px; color: var(--text-muted); cursor: help; font-size: 12px; }
+    .lbl-tip:hover { color: var(--accent); }
+    .tip-popper { max-width: 380px; line-height: 1.6; }
     /* ===== 带单位的输入框 ===== */
-    .input-with-unit { position: relative; }
-    .input-with-unit .form-input { padding-right: 56px; }
-    .input-with-unit .input-unit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; pointer-events: none; }
+    .input-with-unit { display: flex; align-items: center; gap: 8px; }
+    .input-with-unit > .el-input-number,
+    .input-with-unit > .el-input { flex: 1 1 auto; min-width: 0; }
+    .input-with-unit .form-input { padding-right: 0; }
+    .input-with-unit .input-unit { position: static; transform: none; flex: 0 0 auto; white-space: nowrap; color: var(--text-muted); font-size: 12px; pointer-events: none; }
+    /* 数字类字段占满所在单元格，避免窄列里只显示 200px 的短框 */
+    .form-row .input-with-unit > .el-input-number { max-width: none; }
     .input-with-unit .form-input::-webkit-inner-spin-button,
     .input-with-unit .form-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .input-with-unit .form-input[type=number] { -moz-appearance: textfield; }
@@ -92,9 +100,10 @@
     .ver-item { display: flex; flex-direction: column; gap: 3px; }
     .ver-item .k { font-size: 11px; color: var(--text-muted); }
     .ver-item .v { font-size: 13px; color: var(--text-primary); word-break: break-all; }
+    .ver-empty { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--text-muted); }
     @media (max-width: 900px) { .ver-grid { grid-template-columns: repeat(2, 1fr); } }
     /* ===== 响应式 ===== */
-    @media (max-width: 768px) { .form-row, .form-row.cols-2, .form-row.cols-4 { grid-template-columns: 1fr; } .master-row { flex-direction: column; align-items: flex-start; } }
+    @media (max-width: 768px) { .form-row, .form-row.cols-2, .form-row.cols-4 { grid-template-columns: 1fr; } .master-row { flex-direction: column; align-items: flex-start; } .card-header { flex-wrap: wrap; gap: 6px 12px; } .card-extra { width: 100%; } }
   </style>
 </head>
 <body>
@@ -113,19 +122,26 @@
               </div>
               <span class="card-extra">版本形态与运行时状态</span>
             </div>
-            <div class="card-body" v-if="sysInfo">
-              <div v-if="renewBanner" class="info-banner" :style="{ background: renewBanner.bg, borderColor: renewBanner.border }">
-                <i class="fa-solid fa-triangle-exclamation" :style="{ color: renewBanner.color }"></i>
-                <span>{{ renewBanner.text }}</span>
-              </div>
-              <div class="ver-grid">
-                <div class="ver-item"><span class="k">品牌</span><span class="v">{{ sysInfo.brand }}</span></div>
-                <div class="ver-item"><span class="k">版本号</span><span class="v">{{ sysInfo.version }}</span></div>
-                <div class="ver-item"><span class="k">构建时间</span><span class="v">{{ sysInfo.build_time }}</span></div>
-                <div class="ver-item"><span class="k">版本形态</span><span class="v"><span class="ver-badge" :class="sysInfo.edition">{{ editionLabel }}</span></span></div>
-                <div class="ver-item"><span class="k">运行时状态</span><span class="v">{{ sysInfo.state_label }}</span></div>
-                <div class="ver-item"><span class="k">授权剩余天数</span><span class="v">{{ daysLeftText }}</span></div>
-                <div class="ver-item"><span class="k">授权到期时间</span><span class="v">{{ sysInfo.expire_at || '—' }}</span></div>
+            <div class="card-body">
+              <template v-if="sysInfo">
+                <div v-if="renewBanner" class="info-banner" :style="{ background: renewBanner.bg, borderColor: renewBanner.border }">
+                  <i class="fa-solid fa-triangle-exclamation" :style="{ color: renewBanner.color }"></i>
+                  <span>{{ renewBanner.text }}</span>
+                </div>
+                <div class="ver-grid">
+                  <div class="ver-item"><span class="k">品牌</span><span class="v">{{ sysInfo.brand }}</span></div>
+                  <div class="ver-item"><span class="k">版本号</span><span class="v">{{ sysInfo.version }}</span></div>
+                  <div class="ver-item"><span class="k">构建时间</span><span class="v">{{ sysInfo.build_time }}</span></div>
+                  <div class="ver-item"><span class="k">版本形态</span><span class="v"><span class="ver-badge" :class="sysInfo.edition">{{ editionLabel }}</span></span></div>
+                  <div class="ver-item"><span class="k">运行时状态</span><span class="v">{{ sysInfo.state_label }}</span></div>
+                  <div class="ver-item"><span class="k">授权剩余天数</span><span class="v">{{ daysLeftText }}</span></div>
+                  <div class="ver-item"><span class="k">授权到期时间</span><span class="v">{{ sysInfo.expire_at || '—' }}</span></div>
+                </div>
+              </template>
+              <div v-else class="ver-empty">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>版本与授权信息未加载，接口 /api/system/info 可能暂时不可用。</span>
+                <el-button size="small" @click="loadInfo">重试</el-button>
               </div>
             </div>
           </div>
@@ -137,20 +153,31 @@
                 <span class="card-icon icon-blue"><i class="fa-solid fa-user-gear"></i></span>
                 <span class="card-title">基础配置</span>
               </div>
-              <span class="card-extra">账户与会话设置</span>
+              <span class="card-extra">账户、会话与引擎接入</span>
             </div>
             <div class="card-body">
               <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
-                <el-form-item label="原始日志存储路径">
-                  <el-input v-model.trim="form.rawLogPath" placeholder="runtime/data/access/"></el-input>
-                  <div class="form-hint">引擎写入原始请求日志的磁盘目录，修改后新日志写入新路径</div>
-                </el-form-item>
-                <el-form-item label="管理员用户名">
-                  <el-input :model-value="adminName" readonly></el-input>
-                  <div class="form-hint">系统默认管理员账户，不可修改</div>
-                </el-form-item>
-                <div class="section-title" style="margin: 8px 0 14px;">修改密码</div>
                 <div class="form-row">
+                  <el-form-item label="原始日志存储路径">
+                    <el-input v-model.trim="form.rawLogPath" placeholder="runtime/data/access/"></el-input>
+                    <div class="form-hint">原始请求日志目录，修改后新日志写入新路径</div>
+                  </el-form-item>
+                  <el-form-item label="引擎专属前缀">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input v-model.trim="form.wafUrlPrefix" placeholder="waf"></el-input>
+                        <span class="input-unit">/</span>
+                      </div>
+                      <div class="form-hint">自产接口/静态资源统一前缀；修改后需重启引擎并重新导入模板</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="管理员用户名">
+                    <el-input :model-value="adminName" readonly></el-input>
+                    <div class="form-hint">系统默认账户，不可修改</div>
+                  </el-form-item>
+                </div>
+                <div class="section-title" style="margin: 8px 0 14px;">修改密码</div>
+                <div class="form-row cols-4">
                   <el-form-item label="旧密码">
                     <el-input v-model="pwd.old" type="password" show-password placeholder="请输入当前密码" autocomplete="current-password"></el-input>
                   </el-form-item>
@@ -160,49 +187,16 @@
                   <el-form-item label="确认新密码">
                     <el-input v-model="pwd.confirm" type="password" show-password placeholder="再次输入新密码" autocomplete="new-password"></el-input>
                   </el-form-item>
+                  <el-form-item label="会话超时时间">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.sessionTimeout" :min="15" :max="1440" :controls="false" style="width:100%"></el-input-number>
+                        <span class="input-unit">分钟</span>
+                      </div>
+                      <div class="form-hint">无操作超时自动退出（1~1440）</div>
+                    </div>
+                  </el-form-item>
                 </div>
-                <el-form-item label="会话超时时间" class="field-narrow">
-                  <div style="width:100%;">
-                    <div class="input-with-unit">
-                      <el-input-number v-model="form.sessionTimeout" :min="15" :max="1440" style="width:100%"></el-input-number>
-                      <span class="input-unit">分钟</span>
-                    </div>
-                    <div class="form-hint">无操作超过该时间将自动退出登录（1~1440）</div>
-                  </div>
-                </el-form-item>
-                <el-form-item>
-                  <div class="card-actions" style="width:100%;">
-                    <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
-                  </div>
-                </el-form-item>
-              </el-form>
-            </div>
-          </div>
-
-          <!-- ===== 引擎接入配置 ===== -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title-wrap">
-                <span class="card-icon icon-blue"><i class="fa-solid fa-plug"></i></span>
-                <span class="card-title">引擎接入配置</span>
-              </div>
-              <span class="card-extra">引擎自产接口/资源统一 URL 前缀</span>
-            </div>
-            <div class="card-body">
-              <div class="info-banner">
-                <i class="fa-solid fa-circle-info"></i>
-                <span>人机验证、排队等自产接口与静态/上传资源全部挂在此专属前缀下，源站可使用 /static、/upload、/assets 等任意通用目录而不与引擎冲突。修改后需<span style="color:var(--danger)">重启引擎</span>生效，并同步重新导入挑战/等候室模板。</span>
-              </div>
-              <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
-                <el-form-item label="引擎专属前缀" style="max-width: 380px;">
-                  <div style="width:100%;">
-                    <div class="input-with-unit">
-                      <el-input v-model.trim="form.wafUrlPrefix" placeholder="waf"></el-input>
-                      <span class="input-unit">/</span>
-                    </div>
-                    <div class="form-hint">默认“waf”，即接口形如 /waf/challenge/verify；仅支持数字、字母、下划线</div>
-                  </div>
-                </el-form-item>
                 <el-form-item>
                   <div class="card-actions" style="width:100%;">
                     <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
@@ -234,49 +228,148 @@
                   </div>
                 </div>
                 <div class="form-row">
-                  <el-form-item label="最大并发连接数">
+                  <el-form-item>
+                    <template #label>
+                      <span>最大并发连接数<el-tooltip placement="top" popper-class="tip-popper" content="每个应用（站点）各自一份连接上限：按监听端口分配，一个应用独占一个端口时即为每应用独立；多个应用共用同一端口时共享该额度。超限时新连接在内核队列等待，不会返回提示页；修改后需重启引擎生效"><i class="fa-solid fa-circle-question lbl-tip"></i></el-tooltip></span>
+                    </template>
                     <div style="width:100%;">
                       <div class="input-with-unit">
-                        <el-input-number v-model="form.maxConn" :min="1" :max="1000000" style="width:100%"></el-input-number>
+                        <el-input-number v-model="form.maxConn" :min="1" :max="1000000" :controls="false" style="width:100%"></el-input-number>
                         <span class="input-unit">个</span>
                       </div>
-                      <div class="form-hint">每个应用（站点）各自一份连接上限：按监听端口分配，一个应用独占一个端口时即为每应用独立；多个应用共用同一端口时共享该额度。超限时新连接在内核队列等待，不会返回提示页；修改后需重启引擎生效</div>
                     </div>
                   </el-form-item>
-                  <el-form-item label="请求超时时间">
+                  <el-form-item>
+                    <template #label>
+                      <span>请求超时时间<el-tooltip placement="top" popper-class="tip-popper" content="单次请求处理超时阈值（读/写/空闲超时统一取此值）；修改后需重启引擎生效"><i class="fa-solid fa-circle-question lbl-tip"></i></el-tooltip></span>
+                    </template>
                     <div style="width:100%;">
                       <div class="input-with-unit">
-                        <el-input-number v-model="form.reqTimeout" :min="1" :max="600" style="width:100%"></el-input-number>
+                        <el-input-number v-model="form.reqTimeout" :min="1" :max="600" :controls="false" style="width:100%"></el-input-number>
                         <span class="input-unit">秒</span>
                       </div>
-                      <div class="form-hint">单次请求处理超时阈值（读/写/空闲超时统一取此值）；修改后需重启引擎生效</div>
                     </div>
                   </el-form-item>
-                  <el-form-item label="挑战会话数量上限">
+                  <el-form-item>
+                    <template #label>
+                      <span>挑战会话数量上限<el-tooltip placement="top" popper-class="tip-popper" content="极端并发下在内存中同时保留的人机验证/JS挑战会话上限；到顶后新访问返回 503 过载页，已过期的会话照常清理，绝不淘汰正在验证的会话"><i class="fa-solid fa-circle-question lbl-tip"></i></el-tooltip></span>
+                    </template>
                     <div style="width:100%;">
                       <div class="input-with-unit">
-                        <el-input-number v-model="form.challengeMax" :min="1000" :max="10000000" style="width:100%"></el-input-number>
+                        <el-input-number v-model="form.challengeMax" :min="1000" :max="10000000" :controls="false" style="width:100%"></el-input-number>
                         <span class="input-unit">个</span>
                       </div>
-                      <div class="form-hint">极端并发下在内存中同时保留的人机验证/JS挑战会话上限；到顶后新访问返回 503 过载页，已过期的会话照常清理，绝不淘汰正在验证的会话</div>
                     </div>
                   </el-form-item>
-                  <el-form-item label="0秒挑战通过阈值">
+                  <el-form-item>
+                    <template #label>
+                      <span>0秒挑战通过阈值<el-tooltip placement="top" popper-class="tip-popper" content="0秒档（透明注入）采集评分的通过线（百分制扣分制，默认60）：评分达到阈值签发放行凭证，低于则下一次请求升级为1秒JS挑战"><i class="fa-solid fa-circle-question lbl-tip"></i></el-tooltip></span>
+                    </template>
                     <div style="width:100%;">
                       <div class="input-with-unit">
-                        <el-input-number v-model="form.zsecPassScore" :min="20" :max="95" style="width:100%"></el-input-number>
+                        <el-input-number v-model="form.zsecPassScore" :min="20" :max="95" :controls="false" style="width:100%"></el-input-number>
                         <span class="input-unit">分</span>
                       </div>
-                      <div class="form-hint">0秒档（透明注入）采集评分的通过线（百分制扣分制，默认60）：评分达到阈值签发放行凭证，低于则下一次请求升级为1秒JS挑战</div>
                     </div>
                   </el-form-item>
-                  <el-form-item label="老内核访客策略">
+                  <el-form-item>
+                    <template #label>
+                      <span>老内核访客策略<el-tooltip placement="top" popper-class="tip-popper" content="前端能力探测判定老内核（与UA无关，伪造IE请求头无收益）：引导升级=双核浏览器一键切极速即恢复；专项验证=老内核访客完成图形验证码后可正常访问"><i class="fa-solid fa-circle-question lbl-tip"></i></el-tooltip></span>
+                    </template>
                     <div style="width:100%;">
                       <el-select v-model="form.legacyPolicy" style="width:100%">
                         <el-option label="引导升级（跳浏览器升级引导页，推荐）" value="guide"></el-option>
                         <el-option label="IE专项验证（老内核访客完成图形验证码后可访问）" value="ie_captcha"></el-option>
                       </el-select>
-                      <div class="form-hint">前端能力探测判定老内核（与UA无关，伪造IE请求头无收益）：引导升级=双核浏览器一键切极速即恢复；专项验证=老内核访客完成图形验证码后可正常访问</div>
+                    </div>
+                  </el-form-item>
+                </div>
+                <el-form-item>
+                  <div class="card-actions" style="width:100%;">
+                    <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+
+          <!-- ===== 带宽保护 ===== -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon icon-blue"><i class="fa-solid fa-gauge-high"></i></span>
+                <span class="card-title">带宽保护</span>
+              </div>
+              <span class="card-extra">超限时仅把 0 秒档站点降级为 1 秒挑战</span>
+            </div>
+            <div class="card-body">
+              <div class="info-banner">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>按服务器网卡实际出带宽判定（10 秒滑动平均，与云监控同粒度）：达到触发阈值并持续超限时，仅把<b> 0 秒档 </b>站点的新导航降级为 1 秒挑战；1/3/5 秒与滑块/验证码站点完全不受影响。带宽回落后自动恢复，不修改站点配置、不写升级标记。</span>
+              </div>
+              <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
+                <div class="master-row">
+                  <div class="ms-info">
+                    <div class="ms-title"><i class="fa-solid fa-gauge-high" style="color:var(--success)"></i> 自动降级开关</div>
+                    <div class="ms-desc">关闭后不采集、不降级；开启前请先填写购买带宽并观察日志中的实测值</div>
+                  </div>
+                  <div class="ms-control">
+                    <span class="ms-status" :class="form.bwGuardEnabled ? 'on' : 'off'">{{ form.bwGuardEnabled ? '已开启' : '已关闭' }}</span>
+                    <el-switch v-model="form.bwGuardEnabled"></el-switch>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <el-form-item label="购买带宽">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.bwLimitMbps" :min="0" :max="100000" :step="10" :controls="false" style="width:100%"></el-input-number>
+                        <span class="input-unit">Mbps</span>
+                      </div>
+                      <div class="form-hint">公网出带宽套餐值；0=未配置不启用</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="触发阈值">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.bwTriggerPct" :min="50" :max="100" :controls="false" style="width:100%"></el-input-number>
+                        <span class="input-unit">%</span>
+                      </div>
+                      <div class="form-hint">达到该比例并连续 3 个 10 秒窗口超限即降级</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="恢复阈值">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.bwReleasePct" :min="10" :max="99" :controls="false" style="width:100%"></el-input-number>
+                        <span class="input-unit">%</span>
+                      </div>
+                      <div class="form-hint">低于该比例并持续满足才解除，须小于触发阈值</div>
+                    </div>
+                  </el-form-item>
+                </div>
+                <div class="form-row">
+                  <el-form-item label="采样网卡">
+                    <div style="width:100%;">
+                      <el-input v-model.trim="form.bwIface" placeholder="留空自动识别（如 eth0）"></el-input>
+                      <div class="form-hint">一般留空；多网卡时填写承载公网流量的网卡名</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="最短保持">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.bwHoldSec" :min="60" :max="3600" :step="60" :controls="false" style="width:100%"></el-input-number>
+                        <span class="input-unit">秒</span>
+                      </div>
+                      <div class="form-hint">降级后至少保持，防止 0 秒/1 秒反复切换</div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="冷却时间">
+                    <div style="width:100%;">
+                      <div class="input-with-unit">
+                        <el-input-number v-model="form.bwCooldownSec" :min="60" :max="7200" :step="60" :controls="false" style="width:100%"></el-input-number>
+                        <span class="input-unit">秒</span>
+                      </div>
+                      <div class="form-hint">解除后这段时间内不再自动触发（打满 100% 除外）</div>
                     </div>
                   </el-form-item>
                 </div>
@@ -304,7 +397,7 @@
                   <i class="fa-solid fa-circle-info"></i>
                   <span>清理任务将按“统计数据聚合间隔”周期执行；立即清理将删除超过保留期的历史数据，操作不可恢复。</span>
                 </div>
-                <div class="form-row cols-2">
+                <div class="form-row">
                   <el-form-item label="攻击日志保留天数">
                     <div style="width:100%;">
                       <div class="input-with-unit">
@@ -350,31 +443,37 @@
                       <div class="form-hint">磁盘原始日志文件超过该天数将被清理</div>
                     </div>
                   </el-form-item>
-                  <el-form-item label="请求维度统计保留天数">
+                  <el-form-item>
+                    <template #label>
+                      <span>请求维度统计保留天数<el-tooltip placement="top" popper-class="tip-popper" content="IP/URL/UA 排行、地域、状态码等分布数据；每小时自动裁剪只保留前 200（地域前 10），超期数据被清理"><i class="fa-solid fa-circle-question lbl-tip"></i></el-tooltip></span>
+                    </template>
                     <div style="width:100%;">
                       <div class="input-with-unit">
-                        <el-input-number v-model="form.dimStatsDays" :min="1" :max="90" style="width:100%"></el-input-number>
+                        <el-input-number v-model="form.dimStatsDays" :min="1" :max="90" :controls="false" style="width:100%"></el-input-number>
                         <span class="input-unit">天</span>
                       </div>
-                      <div class="form-hint">IP/URL/UA 排行、地域、状态码等分布数据；每小时自动裁剪只保留前 200（地域前 10），超期数据被清理</div>
                     </div>
                   </el-form-item>
-                  <el-form-item label="去重统计小时数据保留时长">
+                  <el-form-item>
+                    <template #label>
+                      <span>去重统计小时数据保留时长<el-tooltip placement="top" popper-class="tip-popper" content="独立IP/UV/攻击IP 的小时草图（24 小时视图数据源）；建议不低于 48，以便天级汇总失败时可自愈"><i class="fa-solid fa-circle-question lbl-tip"></i></el-tooltip></span>
+                    </template>
                     <div style="width:100%;">
                       <div class="input-with-unit">
-                        <el-input-number v-model="form.dedupHourHours" :min="26" :max="168" style="width:100%"></el-input-number>
+                        <el-input-number v-model="form.dedupHourHours" :min="26" :max="168" :controls="false" style="width:100%"></el-input-number>
                         <span class="input-unit">小时</span>
                       </div>
-                      <div class="form-hint">独立IP/UV/攻击IP 的小时草图（24 小时视图数据源）；建议不低于 48，以便天级汇总失败时可自愈</div>
                     </div>
                   </el-form-item>
-                  <el-form-item label="去重统计天级数据保留天数">
+                  <el-form-item>
+                    <template #label>
+                      <span>去重统计天级数据保留天数<el-tooltip placement="top" popper-class="tip-popper" content="独立IP/UV/攻击IP 的天级草图（7 天 / 30 天视图数据源）；建议不小于仪表盘最大统计范围"><i class="fa-solid fa-circle-question lbl-tip"></i></el-tooltip></span>
+                    </template>
                     <div style="width:100%;">
                       <div class="input-with-unit">
-                        <el-input-number v-model="form.dedupDayDays" :min="7" :max="365" style="width:100%"></el-input-number>
+                        <el-input-number v-model="form.dedupDayDays" :min="7" :max="365" :controls="false" style="width:100%"></el-input-number>
                         <span class="input-unit">天</span>
                       </div>
-                      <div class="form-hint">独立IP/UV/攻击IP 的天级草图（7 天 / 30 天视图数据源）；建议不小于仪表盘最大统计范围</div>
                     </div>
                   </el-form-item>
                   <el-form-item label="统计数据聚合间隔">
@@ -431,25 +530,29 @@
               <span class="card-extra">排队用户轮询心跳与放行凭证有效期</span>
             </div>
             <div class="card-body">
-              <el-form class="form-grid" style="grid-template-columns:repeat(2,1fr);" :model="form" label-position="top" @submit.prevent="saveBasic">
-                <el-form-item label="等候室心跳时长（秒）">
-                  <el-input-number v-model="form.heartbeatInterval" :min="5" :max="120" style="width:100%"></el-input-number>
-                  <div class="form-hint">用户轮询超时时间，心跳超时自动出队释放坐席</div>
-                </el-form-item>
-                <el-form-item label="保底放行速率（人/秒）">
-                  <el-input-number v-model="form.ccFloorRate" :min="1" :max="100" style="width:100%"></el-input-number>
-                  <div class="form-hint">阈值顶满时每秒仍保底放行 N 人防饿死（队列500人÷5=100秒消化完）</div>
-                </el-form-item>
-                <el-form-item label="放行凭证有效期（秒）">
-                  <el-input-number v-model="form.ticketValidity" :min="5" :max="120" style="width:100%"></el-input-number>
-                  <div class="form-hint">排队轮到后等候凭证有效时间，过期需重新排队</div>
-                </el-form-item>
-                <el-form-item label="等候凭证Cookie名">
-                  <el-input v-model.trim="form.waitingCookieName" placeholder="waf_waiting"></el-input>
-                  <div class="form-hint">等候室通过后签发的通行凭证Cookie名，与挑战凭证独立</div>
-                </el-form-item>
-                <el-form-item style="grid-column:1/-1;">
-                  <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+              <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
+                <div class="form-row cols-4">
+                  <el-form-item label="等候室心跳时长（秒）">
+                    <el-input-number v-model="form.heartbeatInterval" :min="5" :max="120" :controls="false" style="width:100%"></el-input-number>
+                    <div class="form-hint">轮询超时即自动出队释放坐席</div>
+                  </el-form-item>
+                  <el-form-item label="保底放行速率（人/秒）">
+                    <el-input-number v-model="form.ccFloorRate" :min="1" :max="100" :controls="false" style="width:100%"></el-input-number>
+                    <div class="form-hint">阈值顶满时每秒仍保底放行，防饿死</div>
+                  </el-form-item>
+                  <el-form-item label="放行凭证有效期（秒）">
+                    <el-input-number v-model="form.ticketValidity" :min="5" :max="120" :controls="false" style="width:100%"></el-input-number>
+                    <div class="form-hint">轮到后凭证有效时间，过期需重排</div>
+                  </el-form-item>
+                  <el-form-item label="等候凭证Cookie名">
+                    <el-input v-model.trim="form.waitingCookieName" placeholder="waf_waiting"></el-input>
+                    <div class="form-hint">与挑战凭证独立</div>
+                  </el-form-item>
+                </div>
+                <el-form-item class="full">
+                  <div class="card-actions" style="width:100%;">
+                    <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
+                  </div>
                 </el-form-item>
               </el-form>
             </div>
@@ -462,35 +565,39 @@
               <span class="card-extra">三关依次判定，命中即停：站点规则 → 单 IP 基线 → 整站应用级</span>
             </div>
             <div class="card-body">
-              <el-form class="form-grid" style="grid-template-columns:repeat(2,1fr);" :model="form" label-position="top" @submit.prevent="saveBasic">
-                <el-form-item label="应用级触发阈值（整站）">
-                  <div style="width:100%;">
-                    <div class="th-inline">
-                      <el-input-number v-model="form.ccSiteWin" :min="1" :controls="false" style="width:70px;"></el-input-number>
-                      <span class="th-unit">分钟内总请求</span>
-                      <el-input-number v-model="form.ccSiteRate" :min="1" :controls="false" style="width:90px;"></el-input-number>
-                      <span class="th-unit">次进入</span>
+              <el-form :model="form" label-position="top" @submit.prevent="saveBasic">
+                <div class="form-row">
+                  <el-form-item label="应用级触发阈值（整站）">
+                    <div style="width:100%;">
+                      <div class="th-inline">
+                        <el-input-number v-model="form.ccSiteWin" :min="1" :controls="false" style="width:60px;"></el-input-number>
+                        <span class="th-unit">分钟内</span>
+                        <el-input-number v-model="form.ccSiteRate" :min="1" :controls="false" style="width:80px;"></el-input-number>
+                        <span class="th-unit">次进入</span>
+                      </div>
+                      <div class="form-hint">N 分钟内总请求 ≥ M 次 → 进入等候室；仅统计导航类请求，持票请求不计入</div>
                     </div>
-                    <div class="form-hint">同一应用 N 分钟内总请求 ≥ M 次 → 进入等候室；不管有没有 CC 规则都生效，仅统计进入 CC 判定的导航类请求，页面内持票请求不计入</div>
-                  </div>
-                </el-form-item>
-                <el-form-item label="单 IP 基线（保底）">
-                  <div style="width:100%;">
-                    <div class="th-inline">
-                      <el-input-number v-model="form.ccBaseWin" :min="1" :controls="false" style="width:70px;"></el-input-number>
-                      <span class="th-unit">秒内单 IP</span>
-                      <el-input-number v-model="form.ccBaseRate" :min="1" :controls="false" style="width:90px;"></el-input-number>
-                      <span class="th-unit">次进入</span>
+                  </el-form-item>
+                  <el-form-item label="单 IP 基线（保底）">
+                    <div style="width:100%;">
+                      <div class="th-inline">
+                        <el-input-number v-model="form.ccBaseWin" :min="1" :controls="false" style="width:60px;"></el-input-number>
+                        <span class="th-unit">秒内</span>
+                        <el-input-number v-model="form.ccBaseRate" :min="1" :controls="false" style="width:80px;"></el-input-number>
+                        <span class="th-unit">次进入</span>
+                      </div>
+                      <div class="form-hint">规则没命中的流量由这一层保底，触发同样进等候室</div>
                     </div>
-                    <div class="form-hint">规则没命中的流量（例如只限爬虫的规则放过的非爬虫流量）由这一层保底；不管有没有 CC 规则都生效，触发同样进等候室</div>
+                  </el-form-item>
+                  <el-form-item label="队列容量（坐席数）">
+                    <el-input-number v-model="form.ccQueueCapacity" :min="1" :controls="false" style="width:100%;max-width:200px"></el-input-number>
+                    <div class="form-hint">单站点坐席数，每个站点独立计数；坐席满 → 新请求返回 503 过载页</div>
+                  </el-form-item>
+                </div>
+                <el-form-item class="full">
+                  <div class="card-actions" style="width:100%;">
+                    <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
                   </div>
-                </el-form-item>
-                <el-form-item label="队列容量（坐席数）">
-                  <el-input-number v-model="form.ccQueueCapacity" :min="1" style="width:100%"></el-input-number>
-                  <div class="form-hint">这里设置的就是单个站点的坐席数，每个站点各自独立计数；坐席满 → 新请求返回 503 过载页</div>
-                </el-form-item>
-                <el-form-item style="grid-column:1/-1;">
-                  <el-button type="primary" @click="saveBasic"><i class="fa-solid fa-check"></i> 保存配置</el-button>
                 </el-form-item>
               </el-form>
             </div>
@@ -545,6 +652,9 @@ const app = createApp({
         heartbeatInterval: 45, ticketValidity: 10, waitingCookieName: 'waf_waiting', ccFloorRate: 5,
         ccSiteWin: 1, ccSiteRate: 10000, ccQueueCapacity: 1000,
         ccBaseWin: 60, ccBaseRate: 600,
+        // 带宽保护（2026-11-18）：购买带宽/阈值/网卡/保持/冷却
+        bwGuardEnabled: false, bwLimitMbps: 0, bwTriggerPct: 90, bwReleasePct: 80,
+        bwIface: '', bwHoldSec: 300, bwCooldownSec: 600,
         // 访问统计/分析批次沿用统一全局保留期，UI 不展示，保存时透传避免覆盖
         _logRetention: 30
       }
@@ -584,7 +694,7 @@ const app = createApp({
     loadInfo() {
       const cached = App.info;
       if (cached) { this.sysInfo = cached; return; }
-      App.loadInfo().then((info) => { this.sysInfo = info; });
+      App.loadInfo().then((info) => { this.sysInfo = info; }).catch(() => {});
     },
     loadConfig() {
       this.loading = true;
@@ -621,6 +731,13 @@ const app = createApp({
           f.ccQueueCapacity = c.cc_waiting_max_size || 1000;
           f.ccBaseWin = c.cc_default_window || 60;
           f.ccBaseRate = c.cc_default_threshold || 600;
+          f.bwGuardEnabled = c.bw_guard_enabled === 1;
+          f.bwLimitMbps = c.bw_limit_mbps || 0;
+          f.bwTriggerPct = c.bw_trigger_pct || 90;
+          f.bwReleasePct = c.bw_release_pct || 80;
+          f.bwIface = c.bw_iface || '';
+          f.bwHoldSec = c.bw_hold_sec || 300;
+          f.bwCooldownSec = c.bw_cooldown_sec || 600;
           f._logRetention = c.log_retention_days || 30;
         }
       }).finally(() => this.loading = false);
@@ -662,6 +779,14 @@ const app = createApp({
       if (!Number.isFinite(f.ccQueueCapacity) || f.ccQueueCapacity < 1) { ElementPlus.ElMessage.warning('队列容量需 ≥ 1'); return; }
       if (!Number.isFinite(f.ccBaseWin) || f.ccBaseWin < 1) { ElementPlus.ElMessage.warning('单 IP 基线时间窗需 ≥ 1 秒'); return; }
       if (!Number.isFinite(f.ccBaseRate) || f.ccBaseRate < 1) { ElementPlus.ElMessage.warning('单 IP 基线次数需 ≥ 1'); return; }
+      if (f.bwGuardEnabled) {
+        if (!Number.isFinite(f.bwLimitMbps) || f.bwLimitMbps < 1) { ElementPlus.ElMessage.warning('开启带宽保护需填写购买带宽（Mbps）'); return; }
+        if (!Number.isFinite(f.bwTriggerPct) || f.bwTriggerPct < 50 || f.bwTriggerPct > 100) { ElementPlus.ElMessage.warning('带宽触发阈值需在 50~100% 之间'); return; }
+        if (!Number.isFinite(f.bwReleasePct) || f.bwReleasePct < 10 || f.bwReleasePct >= f.bwTriggerPct) { ElementPlus.ElMessage.warning('带宽恢复阈值需在 10~99% 且小于触发阈值'); return; }
+        if (!Number.isFinite(f.bwHoldSec) || f.bwHoldSec < 60 || f.bwHoldSec > 3600) { ElementPlus.ElMessage.warning('最短保持时间需在 60~3600 秒之间'); return; }
+        if (!Number.isFinite(f.bwCooldownSec) || f.bwCooldownSec < 60 || f.bwCooldownSec > 7200) { ElementPlus.ElMessage.warning('冷却时间需在 60~7200 秒之间'); return; }
+        if (f.bwIface && !/^[a-zA-Z0-9_.:-]+$/.test(f.bwIface)) { ElementPlus.ElMessage.warning('采样网卡名格式不正确（如 eth0）'); return; }
+      }
       if (!/^[a-zA-Z0-9_]+$/.test(f.wafUrlPrefix || '')) { ElementPlus.ElMessage.warning('引擎专属前缀仅支持数字、字母、下划线'); return; }
       this.saving = true;
       let msg = '配置已保存';
@@ -673,6 +798,9 @@ const app = createApp({
         heartbeat_interval: f.heartbeatInterval, ticket_validity: f.ticketValidity, waiting_cookie_name: f.waitingCookieName || 'waf_waiting', cc_waiting_floor_rate: f.ccFloorRate,
         cc_site_window: f.ccSiteWin, cc_site_rate: f.ccSiteRate, cc_waiting_max_size: f.ccQueueCapacity,
         cc_default_window: f.ccBaseWin, cc_default_threshold: f.ccBaseRate,
+        bw_guard_enabled: App.to01(f.bwGuardEnabled), bw_limit_mbps: f.bwLimitMbps || 0,
+        bw_trigger_pct: f.bwTriggerPct || 90, bw_release_pct: f.bwReleasePct || 80,
+        bw_iface: f.bwIface || '', bw_hold_sec: f.bwHoldSec || 300, bw_cooldown_sec: f.bwCooldownSec || 600,
         raw_log_batch_size: f.rawLogBatchSize, raw_log_flush_seconds: f.rawLogFlushSeconds, disk_clean_threshold: f.diskCleanThreshold, log_retention_days: f._logRetention,
         challenge_record_retention_days: f.challengeRecordDays,
         dim_stats_retention_days: f.dimStatsDays, dedup_hour_retention_hours: f.dedupHourHours, dedup_day_retention_days: f.dedupDayDays
